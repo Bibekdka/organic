@@ -1,3 +1,4 @@
+/* eslint-disable no-unused-vars */
 import * as React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -14,7 +15,6 @@ import {
   Menu, 
   X,
   ChevronRight,
-  TrendingDown,
   TrendingUp
 } from 'lucide-react';
 import { cn } from '@/lib/utils';

@@ -1,10 +1,21 @@
 import firebaseRulesPlugin from '@firebase/eslint-plugin-security-rules';
 import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
+import globals from 'globals';
 
 export default [
   {
-    ignores: ['dist/**/*', 'node_modules/**/*']
+    ignores: ['dist/**/*', 'node_modules/**/*', 'firestore.rules']
+  },
+  {
+    files: ['**/*.js', '**/*.ts', '**/*.tsx'],
+    languageOptions: {
+      globals: {
+        ...globals.browser,
+        ...globals.node,
+        process: 'readonly'
+      }
+    }
   },
   {
     files: ['**/*.js', '**/*.ts', '**/*.tsx'],
@@ -12,7 +23,7 @@ export default [
   },
   {
     files: ['**/*.js', '**/*.ts', '**/*.tsx'],
-    ...tseslint.configs.recommended[0], // Simplified to avoid spread issues if it's an array
+    ...tseslint.configs.recommended[0],
   },
   {
     files: ['**/*.rules'],

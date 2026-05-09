@@ -27,6 +27,7 @@ export type Member = {
   role: 'admin' | 'member';
   status: 'active' | 'inactive';
   joinedAt: number;
+  shares: number; // Added this
 };
 
 export type SplitType = 'equal' | 'percentage' | 'custom' | 'shares';
@@ -74,6 +75,16 @@ export type Share = {
   percentage: number;
   units: number;
   updatedAt: number;
+};
+
+export type ShareTransaction = {
+  id: string;
+  memberId: string;
+  previousUnits: number;
+  newUnits: number;
+  change: number;
+  reason: string;
+  createdAt: any;
 };
 
 export type TaskStatus = 'todo' | 'in_progress' | 'done';

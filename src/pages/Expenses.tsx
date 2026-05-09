@@ -2,7 +2,6 @@ import * as React from 'react';
 import { 
   Receipt, 
   Plus, 
-  Download, 
   Search, 
   Filter, 
   AlertCircle,
@@ -32,7 +31,6 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
 import { 
   Table, 
   TableBody, 
@@ -213,7 +211,7 @@ export function ExpensesPage() {
   };
 
   const deleteExpense = async (id: string) => {
-    if (!confirm('Permanently delete this expense record?')) return;
+    if (!window.confirm('Permanently delete this expense record?')) return;
     try {
       await deleteDoc(doc(db, 'expenses', id));
       toast.success('Expense record removed');

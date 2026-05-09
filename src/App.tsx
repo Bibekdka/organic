@@ -5,18 +5,17 @@ import { Dashboard } from './pages/Dashboard';
 import { MembersPage } from './pages/Members';
 import { ExpensesPage } from './pages/Expenses';
 import { SettlementsPage } from './pages/Settlements';
+import { SharesPage } from './pages/Shares';
 import { Toaster } from './components/ui/sonner';
+import { toast } from 'sonner';
 import { Button } from './components/ui/button';
 import { 
   LogIn, 
   TrendingUp, 
-  LayoutDashboard, 
-  CheckCircle2, 
-  Users as UsersIcon,
-  PieChart as PieChartIcon,
   ShieldCheck,
   CreditCard,
-  Loader2
+  Loader2,
+  Package
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
@@ -26,7 +25,7 @@ import { auth } from './lib/firebase';
 const PlaceholderPage = ({ title }: { title: string }) => (
   <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
     <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center text-primary mb-2">
-      <LayoutDashboard className="w-10 h-10" />
+      <Package className="w-10 h-10" />
     </div>
     <h2 className="text-3xl font-bold tracking-tight">{title}</h2>
     <p className="text-muted-foreground max-w-sm">
@@ -50,7 +49,7 @@ function LoginPage() {
     try {
       await signInWithPopup(auth, provider);
     } catch (error: any) {
-      console.error("Login failed:", error);
+      window.console.error("Login failed:", error);
       if (error.code === 'auth/popup-blocked') {
         toast.error("Sign-in popup was blocked. Please allow popups for this site in your browser settings.");
       } else if (error.code === 'auth/cancelled-popup-request') {
@@ -179,10 +178,10 @@ function LoginPage() {
 }
 
 export default function App() {
-  const { user, loading, initialized } = useAuthStore();
-  const [activePage, setActivePage] = React.useState<PageId>('dashboard');
-
-  if (!initialized || loading) {
+    const { user, initialized } = useAuthStore();
+    const [activePage, setActivePage] = React.useState<PageId>('dashboard');
+  
+    if (!initialized) {
     return (
       <div className="h-screen w-full flex flex-col items-center justify-center space-y-6 bg-background">
         <div className="relative">
@@ -214,7 +213,7 @@ export default function App() {
       case 'members': return <MembersPage />;
       case 'expenses': return <ExpensesPage />;
       case 'settlements': return <SettlementsPage />;
-      case 'shares': return <PlaceholderPage title="Shares Management" />;
+      case 'shares': return <SharesPage />;
       case 'income': return <PlaceholderPage title="Income Tracking" />;
       case 'tasks': return <PlaceholderPage title="Tasks & Kanban" />;
       case 'reports': return <PlaceholderPage title="Reports & Export" />;

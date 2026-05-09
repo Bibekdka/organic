@@ -6,8 +6,6 @@ import {
   AlertCircle,
   ArrowUpRight,
   ArrowDownRight,
-  PieChart,
-  Calendar,
   Loader2,
   Sparkles,
   FileDown,
@@ -152,7 +150,7 @@ export function Dashboard() {
         const result = await getSpendingInsights(expenses);
         setInsights(result);
     } catch (error) {
-        console.error("AI Insight error:", error);
+        window.console.error("AI Insight error:", error);
     } finally {
         setLoadingInsights(false);
     }

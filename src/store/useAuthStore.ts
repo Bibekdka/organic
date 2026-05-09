@@ -1,5 +1,6 @@
+/* eslint-disable no-unused-vars */
 import { create } from 'zustand';
-import { User as FirebaseUser, onAuthStateChanged } from 'firebase/auth';
+import { onAuthStateChanged } from 'firebase/auth';
 import { auth, db } from '../lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { User } from '../types';
@@ -8,8 +9,8 @@ interface AuthState {
   user: User | null;
   loading: boolean;
   initialized: boolean;
-  setUser: (user: User | null) => void;
-  setLoading: (loading: boolean) => void;
+  setUser: (u: User | null) => void;
+  setLoading: (l: boolean) => void;
 }
 
 export const useAuthStore = create<AuthState>((set) => ({

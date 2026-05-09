@@ -3,15 +3,12 @@ import {
   ArrowRightLeft, 
   Wallet, 
   ArrowRight,
-  TrendingDown,
-  TrendingUp,
   CheckCircle2,
   Loader2
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { collection, query, onSnapshot } from 'firebase/firestore';
+import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Member } from '@/types';
 import { handleFirestoreError, OperationType } from '@/lib/firestore-errors';
@@ -66,11 +63,11 @@ export function SettlementsPage() {
 
     // Simplify settlements
     const debtors = Object.entries(balances)
-      .filter(([_, bal]) => bal < -0.01)
+      .filter(([, bal]) => bal < -0.01)
       .sort((a, b) => a[1] - b[1]); // Most negative first
     
     const creditors = Object.entries(balances)
-      .filter(([_, bal]) => bal > 0.01)
+      .filter(([, bal]) => bal > 0.01)
       .sort((a, b) => b[1] - a[1]); // Most positive first
 
     const settlements: Settlement[] = [];

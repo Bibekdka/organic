@@ -7,7 +7,6 @@ import {
   Clock,
   Users,
   Trash2,
-  Edit,
   FileText,
   Loader2,
   Check
@@ -121,7 +120,7 @@ export function MembersPage() {
   };
 
   const deleteMember = async (id: string) => {
-    if (!confirm('Are you sure? This cannot be undone.')) return;
+    if (!window.confirm('Are you sure? This cannot be undone.')) return;
     try {
       await deleteDoc(doc(db, 'members', id));
       toast.success('Member removed');
@@ -130,10 +129,33 @@ export function MembersPage() {
     }
   };
 
+  const totalShares = React.useMemo(() => members.reduce((sum, m) => sum + (m.shares || 0), 0), [members]);
+
   const filteredMembers = members.filter(m => 
     m.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     m.email.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const [selectedMember, setSelectedMember] = React.useState<Member | null>(null);
+  const [isProfileOpen, setIsProfileOpen] = React.useState(false);
+  const [memberTransactions, setMemberTransactions] = React.useState<any[]>([]);
+  const [loadingProfile, setLoadingProfile] = React.useState(false);
+
+  const viewProfile = (member: Member) => {
+    setSelectedMember(member);
+    setIsProfileOpen(true);
+    setLoadingProfile(true);
+    
+    const q = query(collection(db, 'share_transactions')); // In a real app, query by memberId
+    const unsub = onSnapshot(q, (snapshot) => {
+      const all = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as any));
+      setMemberTransactions(all.filter((t: any) => t.memberId === member.id)
+        .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)));
+      setLoadingProfile(false);
+    }, (error) => handleFirestoreError(error, OperationType.LIST, 'share_transactions'));
+
+    return unsub;
+  };
 
   return (
     <div className="space-y-6">
@@ -173,10 +195,10 @@ export function MembersPage() {
           <Table>
             <TableHeader className="bg-muted/30">
               <TableRow>
-                <TableHead className="w-[300px]">Member</TableHead>
+                <TableHead className="w-[280px]">Member</TableHead>
                 <TableHead>Role</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Equity Base</TableHead>
+                <TableHead>Equity (Units / %)</TableHead>
                 <TableHead>Total Paid</TableHead>
                 <TableHead>Joined</TableHead>
                 <TableHead className="text-right"></TableHead>
@@ -218,7 +240,14 @@ export function MembersPage() {
                       {member.status}
                     </Badge>
                   </TableCell>
-                  <TableCell className="font-mono text-xs text-foreground">{(member as any).shares || 0} Units</TableCell>
+                  <TableCell className="text-foreground">
+                    <div className="flex flex-col">
+                      <span className="font-mono text-xs font-bold">{member.shares || 0} Units</span>
+                      <span className="text-[10px] text-muted-foreground">
+                        {totalShares > 0 ? ((member.shares / totalShares) * 100).toFixed(1) : 0}% Ownership
+                      </span>
+                    </div>
+                  </TableCell>
                   <TableCell className="font-bold text-sm text-foreground">₹{contributions[member.id]?.toLocaleString() || 0}</TableCell>
                   <TableCell className="text-xs text-muted-foreground">
                     <div className="flex items-center gap-1.5">
@@ -234,11 +263,11 @@ export function MembersPage() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-48 p-1">
-                        <DropdownMenuItem onClick={() => toggleRole(member)} className="gap-2 text-xs py-2 text-foreground">
-                          <Edit className="w-3.5 h-3.5" /> Toggle Admin Role
+                        <DropdownMenuItem onClick={() => viewProfile(member)} className="gap-2 text-xs py-2 text-foreground">
+                           <FileText className="w-3.5 h-3.5" /> View Member Profile
                         </DropdownMenuItem>
-                        <DropdownMenuItem className="gap-2 text-xs py-2 text-foreground">
-                          <FileText className="w-3.5 h-3.5" /> View Ledger
+                        <DropdownMenuItem onClick={() => toggleRole(member)} className="gap-2 text-xs py-2 text-foreground">
+                          <Shield className="w-3.5 h-3.5" /> Toggle Admin Role
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem 
@@ -267,6 +296,105 @@ export function MembersPage() {
           </div>
         )}
       </div>
+
+      {/* Member Profile Dialog */}
+      <Dialog open={isProfileOpen} onOpenChange={setIsProfileOpen}>
+         <DialogContent className="sm:max-w-[550px] max-h-[90vh] flex flex-col p-0 overflow-hidden">
+            <DialogHeader className="p-6 pb-0">
+               <DialogTitle>Member Profile</DialogTitle>
+               <DialogDescription>Detailed equity standing and contribution history.</DialogDescription>
+            </DialogHeader>
+            
+            {selectedMember && (
+               <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                  <div className="flex items-center gap-4 p-4 rounded-xl bg-secondary/10 border border-border/40">
+                     <Avatar className="w-16 h-16 border-2 border-background shadow-md">
+                        <AvatarImage src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${selectedMember.name}`} />
+                        <AvatarFallback>{selectedMember.name[0]}</AvatarFallback>
+                     </Avatar>
+                     <div className="flex-1 min-w-0">
+                        <h4 className="text-xl font-black text-foreground truncate">{selectedMember.name}</h4>
+                        <p className="text-xs text-muted-foreground truncate">{selectedMember.email}</p>
+                        <div className="flex items-center gap-2 mt-2">
+                           <Badge variant="outline" className="text-[9px] uppercase font-bold text-primary border-primary/20">
+                              {selectedMember.role}
+                           </Badge>
+                           <Badge variant="outline" className="text-[9px] uppercase font-bold text-emerald-500 border-emerald-500/20">
+                              Active Member
+                           </Badge>
+                        </div>
+                     </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                     <div className="p-4 rounded-xl bg-primary/5 border border-primary/10">
+                        <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest mb-1">Total Equity</p>
+                        <p className="text-2xl font-black text-foreground">{selectedMember.shares} <span className="text-xs font-normal">Units</span></p>
+                        <p className="text-[10px] text-primary/60 font-medium">
+                           {totalShares > 0 ? ((selectedMember.shares / totalShares) * 100).toFixed(2) : 0}% Stake
+                        </p>
+                     </div>
+                     <div className="p-4 rounded-xl bg-emerald-500/5 border border-emerald-500/10">
+                        <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest mb-1">Total Contributions</p>
+                        <p className="text-2xl font-black text-foreground">₹{contributions[selectedMember.id]?.toLocaleString() || 0}</p>
+                        <p className="text-[10px] text-emerald-600 font-medium whitespace-nowrap">Investment in organization</p>
+                     </div>
+                  </div>
+
+                  <div className="space-y-3">
+                     <h5 className="text-sm font-bold flex items-center gap-2 text-foreground">
+                        <Clock className="w-4 h-4 text-primary" />
+                        Share History
+                     </h5>
+                     <div className="rounded-xl border border-border/40 overflow-hidden">
+                        <Table>
+                           <TableHeader className="bg-muted/30">
+                              <TableRow>
+                                 <TableHead className="text-[10px] uppercase font-bold py-2">Date</TableHead>
+                                 <TableHead className="text-[10px] uppercase font-bold py-2">Change</TableHead>
+                                 <TableHead className="text-[10px] uppercase font-bold py-2">New Balance</TableHead>
+                                 <TableHead className="text-[10px] uppercase font-bold py-2">Reason</TableHead>
+                              </TableRow>
+                           </TableHeader>
+                           <TableBody>
+                              {loadingProfile ? (
+                                 <TableRow>
+                                    <TableCell colSpan={4} className="text-center py-8">
+                                       <Loader2 className="w-5 h-5 animate-spin mx-auto text-muted-foreground" />
+                                    </TableCell>
+                                 </TableRow>
+                              ) : memberTransactions.length > 0 ? memberTransactions.map((t) => (
+                                 <TableRow key={t.id} className="text-[11px]">
+                                    <TableCell className="text-muted-foreground">
+                                       {t.createdAt?.toDate ? t.createdAt.toDate().toLocaleDateString() : 'Just now'}
+                                    </TableCell>
+                                    <TableCell className={t.change > 0 ? "text-emerald-500 font-bold" : "text-rose-500 font-bold"}>
+                                       {t.change > 0 ? '+' : ''}{t.change}
+                                    </TableCell>
+                                    <TableCell className="font-bold text-foreground">{t.newUnits}</TableCell>
+                                    <TableCell className="text-muted-foreground italic truncate max-w-[120px]">
+                                       {t.reason}
+                                    </TableCell>
+                                 </TableRow>
+                              )) : (
+                                 <TableRow>
+                                    <TableCell colSpan={4} className="text-center py-8 text-muted-foreground italic">
+                                       No share transactions recorded.
+                                    </TableCell>
+                                 </TableRow>
+                              )}
+                           </TableBody>
+                        </Table>
+                     </div>
+                  </div>
+               </div>
+            )}
+
+            <DialogFooter className="p-6 pt-2 bg-muted/5 border-t">
+               <Button onClick={() => setIsProfileOpen(false)} className="w-full text-foreground" variant="outline">Close Profile</Button>
+            </DialogFooter>
+         </DialogContent>
+      </Dialog>
 
       <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
         <DialogContent className="sm:max-w-[425px]">

@@ -5,7 +5,7 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
 export async function getSpendingInsights(expenses: any[]) {
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-1.5-flash",
       contents: `
         Analyze the following cooperative organization expenses and provide 3-4 professional, concise insights about spending patterns, potential savings, or financial health.
         
@@ -25,7 +25,7 @@ export async function getSpendingInsights(expenses: any[]) {
     }
     return ["Monitor utility costs which are increasing monthly.", "Consider bulk purchase for capital items to reduce overheads."];
   } catch (error) {
-    console.error("Gemini Insight Error:", error);
+    window.console.error("Gemini Insight Error:", error);
     return ["AI Insights are currently unavailable. Please check back later."];
   }
 }
