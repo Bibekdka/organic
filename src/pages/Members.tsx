@@ -119,6 +119,16 @@ export function MembersPage() {
     }
   };
 
+  const toggleStatus = async (member: Member) => {
+    const newStatus = member.status === 'active' ? 'inactive' : 'active';
+    try {
+      await updateDoc(doc(db, 'members', member.id), { status: newStatus });
+      toast.success(`${member.name} is now ${newStatus === 'active' ? 'Online' : 'Offline'}`);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `members/${member.id}`);
+    }
+  };
+
   const deleteMember = async (id: string) => {
     if (!window.confirm('Are you sure? This cannot be undone.')) return;
     try {
@@ -233,13 +243,14 @@ export function MembersPage() {
                   </TableCell>
                   <TableCell>
                     <Badge 
+                      onClick={() => toggleStatus(member)}
                       variant={member.status === 'active' ? 'default' : 'secondary'} 
                       className={cn(
-                        "rounded-full px-2 py-0 h-5 text-[10px] font-bold uppercase tracking-wider bg-transparent border",
-                        member.status === 'active' ? "border-emerald-500/30 text-emerald-500" : "border-muted-foreground/30 text-muted-foreground"
+                        "rounded-full px-2 py-0 h-5 text-[10px] font-bold uppercase tracking-wider bg-transparent border cursor-pointer hover:bg-muted/30 transition-all active:scale-95",
+                        member.status === 'active' ? "border-emerald-500/30 text-emerald-500" : "border-rose-500/30 text-rose-500"
                       )}
                     >
-                      {member.status}
+                      {member.status === 'active' ? 'Active' : 'Offline'}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-foreground">
@@ -321,8 +332,11 @@ export function MembersPage() {
                            <Badge variant="outline" className="text-[9px] uppercase font-bold text-primary border-primary/20">
                               {selectedMember.role}
                            </Badge>
-                           <Badge variant="outline" className="text-[9px] uppercase font-bold text-emerald-500 border-emerald-500/20">
-                              Active Member
+                           <Badge variant="outline" className={cn(
+                              "text-[9px] uppercase font-bold border-none px-2",
+                              selectedMember.status === 'active' ? "text-emerald-500 bg-emerald-500/10" : "text-rose-500 bg-rose-500/10"
+                           )}>
+                              {selectedMember.status === 'active' ? 'Active Member' : 'Offline'}
                            </Badge>
                         </div>
                      </div>
