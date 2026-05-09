@@ -23,7 +23,7 @@ export type Member = {
   societyId: string;
   userId?: string;
   name: string;
-  email: string;
+  email?: string;
   role: 'admin' | 'member';
   status: 'active' | 'inactive';
   joinedAt: number;

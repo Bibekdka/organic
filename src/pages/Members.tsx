@@ -86,12 +86,12 @@ export function MembersPage() {
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
   const handleAddMember = async () => {
-    if (!newName || !newEmail) return;
+    if (!newName) return;
     setIsSubmitting(true);
     try {
       await addDoc(collection(db, 'members'), {
         name: newName,
-        email: newEmail,
+        email: newEmail || '',
         shares: parseFloat(newShares) || 0,
         role: 'member',
         status: 'active',
@@ -133,7 +133,7 @@ export function MembersPage() {
 
   const filteredMembers = members.filter(m => 
     m.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    m.email.toLowerCase().includes(searchTerm.toLowerCase())
+    (m.email && m.email.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   const [selectedMember, setSelectedMember] = React.useState<Member | null>(null);
@@ -410,7 +410,7 @@ export function MembersPage() {
               <Input placeholder="John Doe" value={newName} onChange={(e) => setNewName(e.target.value)} className="text-foreground" />
             </div>
             <div className="grid gap-2">
-              <label className="text-sm font-medium text-foreground">Email Address</label>
+              <label className="text-sm font-medium text-foreground">Email Address (Optional)</label>
               <Input placeholder="john@example.com" type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} className="text-foreground" />
             </div>
             <div className="grid gap-2">
