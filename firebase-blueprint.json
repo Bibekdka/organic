@@ -1,0 +1,92 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile data",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "createdAt": { "type": "integer" }
+      },
+      "required": ["uid", "email", "createdAt"]
+    },
+    "Society": {
+      "title": "Society",
+      "description": "Cooperative society details",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "currency": { "type": "string" },
+        "admins": { "type": "array", "items": { "type": "string" } },
+        "createdAt": { "type": "integer" }
+      },
+      "required": ["id", "name", "admins", "createdAt"]
+    },
+    "Member": {
+      "title": "Member",
+      "description": "A member of a society",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "societyId": { "type": "string" },
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "member"] },
+        "status": { "type": "string", "enum": ["active", "inactive"] },
+        "joinedAt": { "type": "integer" }
+      },
+      "required": ["id", "societyId", "name", "email", "role", "status", "joinedAt"]
+    },
+    "Expense": {
+      "title": "Expense",
+      "description": "Logged expense in a society",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "societyId": { "type": "string" },
+        "description": { "type": "string" },
+        "amount": { "type": "number" },
+        "category": { "type": "string" },
+        "paidBy": { "type": "string" },
+        "date": { "type": "integer" },
+        "splitType": { "type": "string", "enum": ["equal", "percentage", "custom", "shares"] },
+        "splits": { 
+          "type": "array", 
+          "items": { 
+            "type": "object",
+            "properties": {
+              "memberId": { "type": "string" },
+              "amount": { "type": "number" },
+              "percentage": { "type": "number" }
+            }
+          } 
+        },
+        "createdAt": { "type": "integer" }
+      }
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Global user profiles"
+    },
+    "/societies/{societyId}": {
+      "schema": "Society",
+      "description": "Societies collection"
+    },
+    "/societies/{societyId}/members/{memberId}": {
+      "schema": "Member",
+      "description": "Members of a specific society"
+    },
+    "/societies/{societyId}/expenses/{expenseId}": {
+      "schema": "Expense",
+      "description": "Expenses belonging to a society"
+    }
+  }
+}
