@@ -195,6 +195,7 @@ export function MembersPage() {
           <Table>
             <TableHeader className="bg-muted/30">
               <TableRow>
+                <TableHead className="w-[50px]">#</TableHead>
                 <TableHead className="w-[280px]">Member</TableHead>
                 <TableHead>Role</TableHead>
                 <TableHead>Status</TableHead>
@@ -205,8 +206,9 @@ export function MembersPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredMembers.map((member) => (
+              {filteredMembers.map((member, index) => (
                 <TableRow key={member.id} className="hover:bg-muted/50 border-b border-muted/20 transition-colors">
+                  <TableCell className="font-mono text-xs text-muted-foreground">{index + 1}</TableCell>
                   <TableCell>
                     <div className="flex items-center gap-3 text-foreground">
                       <Avatar className="w-10 h-10 border-2 border-background shadow-sm">
