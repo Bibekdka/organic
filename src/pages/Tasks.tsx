@@ -204,11 +204,11 @@ export function TasksPage() {
                             {task.priority}
                           </Badge>
                           <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
+                            <DropdownMenuTrigger render={
                               <Button variant="ghost" size="icon" className="w-7 h-7 -mr-2 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity">
                                 <MoreVertical className="w-4 h-4" />
                               </Button>
-                            </DropdownMenuTrigger>
+                            } />
                             <DropdownMenuContent align="end" className="w-48 text-foreground">
                               <DropdownMenuItem className="text-xs" onClick={() => updateTaskStatus(task.id, 'todo')}>Move to To Do</DropdownMenuItem>
                               <DropdownMenuItem className="text-xs" onClick={() => updateTaskStatus(task.id, 'in_progress')}>Move to In Progress</DropdownMenuItem>

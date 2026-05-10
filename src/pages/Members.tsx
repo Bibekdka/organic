@@ -270,11 +270,11 @@ export function MembersPage() {
                   </TableCell>
                   <TableCell className="text-right">
                     <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
+                      <DropdownMenuTrigger render={
                         <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground">
                           <MoreVertical className="w-4 h-4" />
                         </Button>
-                      </DropdownMenuTrigger>
+                      } />
                       <DropdownMenuContent align="end" className="w-48 p-1">
                         <DropdownMenuItem onClick={() => viewProfile(member)} className="gap-2 text-xs py-2 text-foreground">
                            <FileText className="w-3.5 h-3.5" /> View Member Profile

@@ -7,6 +7,8 @@ import { ExpensesPage } from './pages/Expenses';
 import { SettlementsPage } from './pages/Settlements';
 import { SharesPage } from './pages/Shares';
 import { TasksPage } from './pages/Tasks';
+import { ReportsPage } from './pages/Reports';
+import { SettingsPage } from './pages/Settings';
 import { Toaster } from './components/ui/sonner';
 import { toast } from 'sonner';
 import { Button } from './components/ui/button';
@@ -217,8 +219,8 @@ export default function App() {
       case 'shares': return <SharesPage />;
       case 'income': return <PlaceholderPage title="Income Tracking" />;
       case 'tasks': return <TasksPage />;
-      case 'reports': return <PlaceholderPage title="Reports & Export" />;
-      case 'settings': return <PlaceholderPage title="Organization Settings" />;
+      case 'reports': return <ReportsPage />;
+      case 'settings': return <SettingsPage />;
       default: return <Dashboard />;
     }
   };

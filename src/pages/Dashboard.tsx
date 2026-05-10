@@ -41,6 +41,8 @@ import { db } from '@/lib/firebase';
 import { handleFirestoreError, OperationType } from '@/lib/firestore-errors';
 import { cn } from '@/lib/utils';
 import { getSpendingInsights } from '@/services/geminiService';
+import { AddExpenseDialog } from '@/components/AddExpenseDialog';
+import { Plus } from 'lucide-react';
 
 export function Dashboard() {
   const [stats, setStats] = React.useState({
@@ -53,6 +55,7 @@ export function Dashboard() {
   const [loading, setLoading] = React.useState(true);
   const [insights, setInsights] = React.useState<string[]>([]);
   const [loadingInsights, setLoadingInsights] = React.useState(false);
+  const [isAddOpen, setIsAddOpen] = React.useState(false);
 
   React.useEffect(() => {
     // Listen to Members
@@ -183,11 +186,11 @@ export function Dashboard() {
         </div>
         <div className="flex items-center gap-2">
            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
+              <DropdownMenuTrigger render={
                  <Button variant="outline" size="sm" className="gap-2 text-foreground">
                     <FileDown className="w-4 h-4" /> Download Report
                  </Button>
-              </DropdownMenuTrigger>
+              } />
               <DropdownMenuContent align="end" className="w-48">
                  <DropdownMenuItem onClick={handleExportPDF} className="gap-2 text-foreground">
                     <FileDown className="w-4 h-4 text-rose-500" /> Export PDF
@@ -197,9 +200,14 @@ export function Dashboard() {
                  </DropdownMenuItem>
               </DropdownMenuContent>
            </DropdownMenu>
-           <Button size="sm" className="shadow-lg shadow-primary/20 hidden sm:flex">Refresh Insights</Button>
+           <Button onClick={() => setIsAddOpen(true)} size="sm" className="shadow-lg shadow-primary/20 gap-2">
+              <Plus className="w-4 h-4" /> Log Entry
+           </Button>
+           <Button size="sm" variant="ghost" className="hidden sm:flex text-muted-foreground">Refresh Insights</Button>
         </div>
       </div>
+
+      <AddExpenseDialog open={isAddOpen} onOpenChange={setIsAddOpen} />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard 

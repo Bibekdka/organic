@@ -25,11 +25,33 @@ service cloud.firestore {
     }
 
     function isValidExpense(data) {
-      return data.keys().hasAll(['description', 'amount', 'paidBy', 'splitType', 'createdAt', 'userId']) &&
+      return data.keys().hasAll(['description', 'amount', 'paidBy', 'splitType', 'createdAt', 'createdBy', 'category', 'date', 'splits', 'isRecurring']) &&
              data.description is string && data.description.size() <= 1000 &&
              data.amount is number && data.amount >= 0 &&
+             data.category is string && data.category.size() <= 100 &&
+             data.date is string &&
+             data.splits is list &&
              data.splitType in ['equal', 'percentage', 'custom', 'shares'] &&
-             data.userId == request.auth.uid;
+             data.createdBy == request.auth.uid;
+    }
+
+    function isValidTask(data) {
+      return data.keys().hasAll(['title', 'status', 'priority', 'createdAt', 'societyId']) &&
+             data.title is string && data.title.size() <= 200 &&
+             data.status in ['todo', 'in_progress', 'done'] &&
+             data.priority in ['low', 'medium', 'high'] &&
+             data.createdAt is number &&
+             data.societyId is string;
+    }
+
+    function isValidRecurringTemplate(data) {
+      return data.keys().hasAll(['description', 'amount', 'frequency', 'nextExecutionDate', 'active', 'category', 'paidBy', 'splitType', 'date', 'splits', 'isRecurring', 'createdAt', 'createdBy']) &&
+             data.description is string && data.description.size() <= 1000 &&
+             data.amount is number && data.amount >= 0 &&
+             data.frequency in ['daily', 'weekly', 'monthly', 'yearly'] &&
+             data.nextExecutionDate is number &&
+             data.active is bool &&
+             data.createdBy == request.auth.uid;
     }
 
     // -------------------------------------------------------------------------
@@ -54,6 +76,24 @@ service cloud.firestore {
     match /members/{memberId} {
       allow read: if isSignedIn();
       allow write: if isSignedIn(); // Society members can manage membership for now
+    }
+
+    match /tasks/{taskId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidTask(incoming());
+      allow update: if isSignedIn() && (
+        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'priority', 'assignedTo', 'title', 'description'])
+      );
+      allow delete: if isSignedIn();
+    }
+
+    match /recurring_templates/{templateId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidRecurringTemplate(incoming());
+      allow update: if isSignedIn() && (
+        incoming().diff(existing()).affectedKeys().hasOnly(['active', 'nextExecutionDate', 'description', 'amount'])
+      );
+      allow delete: if isSignedIn();
     }
 
     match /test/connection {

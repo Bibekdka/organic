@@ -43,6 +43,42 @@
       },
       "required": ["id", "societyId", "name", "email", "role", "status", "joinedAt"]
     },
+    "Task": {
+      "title": "Task",
+      "description": "A task in the society's kanban/todo system",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "status": { "type": "string", "enum": ["todo", "in_progress", "done"] },
+        "priority": { "type": "string", "enum": ["low", "medium", "high"] },
+        "assignedTo": { "type": "string" },
+        "createdAt": { "type": "integer" },
+        "societyId": { "type": "string" }
+      },
+      "required": ["title", "status", "priority", "createdAt", "societyId"]
+    },
+    "RecurringTemplate": {
+      "title": "Recurring Template",
+      "description": "Template for repeating expenses",
+      "type": "object",
+      "properties": {
+        "description": { "type": "string" },
+        "amount": { "type": "number" },
+        "category": { "type": "string" },
+        "paidBy": { "type": "string" },
+        "date": { "type": "string" },
+        "splitType": { "type": "string" },
+        "splits": { "type": "array" },
+        "createdAt": { "type": "object" },
+        "createdBy": { "type": "string" },
+        "isRecurring": { "type": "boolean" },
+        "frequency": { "type": "string" },
+        "nextExecutionDate": { "type": "integer" },
+        "active": { "type": "boolean" }
+      },
+      "required": ["description", "amount", "frequency", "nextExecutionDate", "active"]
+    },
     "Expense": {
       "title": "Expense",
       "description": "Logged expense in a society",
@@ -54,7 +90,7 @@
         "amount": { "type": "number" },
         "category": { "type": "string" },
         "paidBy": { "type": "string" },
-        "date": { "type": "integer" },
+        "date": { "type": "string" },
         "splitType": { "type": "string", "enum": ["equal", "percentage", "custom", "shares"] },
         "splits": { 
           "type": "array", 
@@ -67,7 +103,8 @@
             }
           } 
         },
-        "createdAt": { "type": "integer" }
+        "createdAt": { "type": "object" },
+        "createdBy": { "type": "string" }
       }
     }
   },
@@ -80,13 +117,21 @@
       "schema": "Society",
       "description": "Societies collection"
     },
-    "/societies/{societyId}/members/{memberId}": {
+    "/members/{memberId}": {
       "schema": "Member",
-      "description": "Members of a specific society"
+      "description": "Global members collection for the cooperative"
     },
-    "/societies/{societyId}/expenses/{expenseId}": {
+    "/expenses/{expenseId}": {
       "schema": "Expense",
-      "description": "Expenses belonging to a society"
+      "description": "Global expenses collection"
+    },
+    "/tasks/{taskId}": {
+      "schema": "Task",
+      "description": "Tasks collection"
+    },
+    "/recurring_templates/{templateId}": {
+      "schema": "RecurringTemplate",
+      "description": "Recurring expense templates"
     }
   }
 }
