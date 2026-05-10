@@ -185,13 +185,13 @@ export function Dashboard() {
           <p className="text-muted-foreground text-sm">Here's what's happening with Organic-O-Eats today.</p>
         </div>
         <div className="flex items-center gap-2">
-           <DropdownMenu>
-              <DropdownMenuTrigger render={
-                 <Button variant="outline" size="sm" className="gap-2 text-foreground">
-                    <FileDown className="w-4 h-4" /> Download Report
-                 </Button>
-              } />
-              <DropdownMenuContent align="end" className="w-48">
+          <DropdownMenu>
+            <DropdownMenuTrigger render={
+              <Button variant="outline" size="sm" className="gap-2 text-foreground">
+                <FileDown className="w-4 h-4" /> Download Report
+              </Button>
+            } />
+            <DropdownMenuContent align="end" className="w-48">
                  <DropdownMenuItem onClick={handleExportPDF} className="gap-2 text-foreground">
                     <FileDown className="w-4 h-4 text-rose-500" /> Export PDF
                  </DropdownMenuItem>

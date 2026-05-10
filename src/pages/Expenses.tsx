@@ -41,7 +41,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Member } from '@/types';
 import { AddExpenseDialog } from '@/components/AddExpenseDialog';
 
-import { collection, query, onSnapshot, orderBy, deleteDoc, doc } from 'firebase/firestore';
+import { collection, query, onSnapshot, orderBy, deleteDoc, doc, addDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { handleFirestoreError, OperationType } from '@/lib/firestore-errors';
 import { toast } from 'sonner';
@@ -134,6 +134,36 @@ export function ExpensesPage() {
       toast.success('Expense record removed');
     } catch (error) {
        handleFirestoreError(error, OperationType.DELETE, `expenses/${id}`);
+    }
+  };
+
+  const runRecurringTemplate = async (template: any) => {
+    try {
+      // eslint-disable-next-line no-unused-vars
+      const { id, nextExecutionDate, active, frequency, createdAt, ...expenseData } = template;
+      
+      // 1. Log the expense
+      await addDoc(collection(db, 'expenses'), {
+        ...expenseData,
+        date: new Date().toISOString().split('T')[0],
+        createdAt: serverTimestamp()
+      });
+
+      // 2. Update the template's next execution date
+      let daysToAdd = 30;
+      if (frequency === 'daily') daysToAdd = 1;
+      else if (frequency === 'weekly') daysToAdd = 7;
+      else if (frequency === 'monthly') daysToAdd = 30;
+      else if (frequency === 'yearly') daysToAdd = 365;
+
+      await updateDoc(doc(db, 'recurring_templates', id), {
+        nextExecutionDate: Date.now() + daysToAdd * 24 * 60 * 60 * 1000
+      });
+
+      toast.success('Recurring expense instance logged');
+    } catch (error) {
+      toast.error('Failed to run template');
+      handleFirestoreError(error, OperationType.WRITE, `recurring_templates/${template.id}`);
     }
   };
 
@@ -251,10 +281,14 @@ export function ExpensesPage() {
             </SelectTrigger>
             <SelectContent>
                <SelectItem value="all">All Categories</SelectItem>
+               <SelectItem value="Electricity">Electricity</SelectItem>
+               <SelectItem value="Food">Food</SelectItem>
+               <SelectItem value="Travel">Travel</SelectItem>
                <SelectItem value="Utility">Utility</SelectItem>
                <SelectItem value="Maintenance">Maintenance</SelectItem>
                <SelectItem value="Rent">Rent</SelectItem>
-               <SelectItem value="Capital">Capital</SelectItem>
+               <SelectItem value="Payroll">Payroll</SelectItem>
+               <SelectItem value="Grocery">Grocery</SelectItem>
                <SelectItem value="Others">Others</SelectItem>
             </SelectContent>
          </Select>
@@ -356,7 +390,12 @@ export function ExpensesPage() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button variant="ghost" size="sm" className="h-8 gap-2 text-primary hover:text-primary/80">
+                        <Button 
+                          onClick={() => runRecurringTemplate(template)}
+                          variant="ghost" 
+                          size="sm" 
+                          className="h-8 gap-2 text-primary hover:text-primary/80"
+                        >
                           <CheckCircle2 className="w-3.5 h-3.5" /> Run Now
                         </Button>
                       </TableCell>

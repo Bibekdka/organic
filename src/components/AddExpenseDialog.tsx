@@ -33,8 +33,35 @@ interface AddExpenseDialogProps {
   onOpenChange: (open: boolean) => void; // eslint-disable-line no-unused-vars
 }
 
-const DEFAULT_CATEGORIES = ['Utility', 'Maintenance', 'Rent', 'Capital', 'Grocery', 'Others'];
+const DEFAULT_CATEGORIES = [
+  'Electricity',
+  'Food',
+  'Travel',
+  'Utility',
+  'Maintenance',
+  'Rent',
+  'Payroll',
+  'Communication',
+  'Marketing',
+  'Capital',
+  'Grocery',
+  'Misc',
+  'Others'
+];
 
+/**
+ * AddExpenseDialog Component
+ * This component handles the complex logic for logging new organization expenses.
+ * It includes:
+ * 1. Payer selection and amount input.
+ * 2. Dynamic category assignment (with custom option).
+ * 3. Recurring expense template creation.
+ * 4. Multi-member allocation (Splits) using 4 methods:
+ *    - Equal: Divides amount evenly among selected members.
+ *    - Percentage: Manual % assignment.
+ *    - Equity Shares: Allocates based on member's ownership units.
+ *    - Manual: Direct amount entry per member.
+ */
 export function AddExpenseDialog({ open, onOpenChange }: AddExpenseDialogProps) {
   const [members, setMembers] = React.useState<Member[]>([]);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
@@ -53,18 +80,29 @@ export function AddExpenseDialog({ open, onOpenChange }: AddExpenseDialogProps) 
   const [selectedMemberIds, setSelectedMemberIds] = React.useState<string[]>([]);
   const [manualSplits, setManualSplits] = React.useState<Record<string, number>>({});
 
+  /**
+   * Effect: Fetch members from Firestore when the dialog opens.
+   * Ensures payer and allocation lists are always up-to-date.
+   */
   React.useEffect(() => {
     if (!open) return;
     const q = query(collection(db, 'members'));
     const unsub = onSnapshot(q, (snapshot) => {
       const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Member));
       setMembers(list);
+      
+      // Auto-select all members for allocation if none are selected
       if (selectedMemberIds.length === 0) setSelectedMemberIds(list.map(m => m.id));
+      // Set a default payer if none selected
       if (!paidBy && list.length > 0) setPaidBy(list[0].id);
     }, (err) => handleFirestoreError(err, OperationType.LIST, 'members'));
     return unsub;
   }, [open]);
 
+  /**
+   * Memoized Calculation: Expense Allocation (Splits)
+   * Recalculates whenever amount, split type, or selected members change.
+   */
   const splits = React.useMemo(() => {
     if (amount <= 0 || selectedMemberIds.length === 0) return [];
     const selectedMembers = members.filter(m => selectedMemberIds.includes(m.id));
@@ -107,9 +145,17 @@ export function AddExpenseDialog({ open, onOpenChange }: AddExpenseDialogProps) 
       return;
     }
     
+    const userId = auth.currentUser?.uid;
+    if (!userId) {
+      toast.error("User not authenticated");
+      return;
+    }
+    
     setIsSubmitting(true);
     try {
+      // Use custom category if the user opted for it
       const finalCategory = isCustomCategory ? customCategory : category;
+      
       const expenseData = {
         description,
         amount,
@@ -117,23 +163,37 @@ export function AddExpenseDialog({ open, onOpenChange }: AddExpenseDialogProps) 
         paidBy,
         date,
         splitType,
-        splits: splits.map(s => ({
-          memberId: s.memberId,
-          amount: parseFloat(s.amount.toFixed(2)),
-          percentage: s.percentage ? parseFloat(s.percentage.toFixed(2)) : undefined
-        })),
+        // Map splits into final document format, rounding amounts to 2 decimal places
+        splits: splits.map(s => {
+          const split: any = {
+            memberId: s.memberId,
+            amount: parseFloat(s.amount.toFixed(2))
+          };
+          if (s.percentage !== undefined) {
+            split.percentage = parseFloat(s.percentage.toFixed(2));
+          }
+          return split;
+        }),
         createdAt: serverTimestamp(),
-        createdBy: auth.currentUser?.uid,
+        createdBy: userId,
         isRecurring
       };
 
+      // 1. Log the one-time expense instance
       await addDoc(collection(db, 'expenses'), expenseData);
 
+      // 2. If it's recurring, create a template for future automated logs
       if (isRecurring) {
+        let daysToAdd = 30;
+        if (frequency === 'daily') daysToAdd = 1;
+        else if (frequency === 'weekly') daysToAdd = 7;
+        else if (frequency === 'monthly') daysToAdd = 30;
+        else if (frequency === 'yearly') daysToAdd = 365;
+
         await addDoc(collection(db, 'recurring_templates'), {
           ...expenseData,
           frequency,
-          nextExecutionDate: Date.now() + (frequency === 'monthly' ? 30 : 7) * 24 * 60 * 60 * 1000,
+          nextExecutionDate: Date.now() + daysToAdd * 24 * 60 * 60 * 1000,
           active: true
         });
       }
@@ -142,18 +202,28 @@ export function AddExpenseDialog({ open, onOpenChange }: AddExpenseDialogProps) 
       onOpenChange(false);
       resetForm();
     } catch (error) {
+      toast.error("Failed to log expense. Please try again.");
       handleFirestoreError(error, OperationType.CREATE, 'expenses');
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  /**
+   * Resets all form fields to their initial states.
+   */
   const resetForm = () => {
     setAmount(0);
     setDescription('');
+    setCategory('Grocery'); // Default to a common category
     setIsRecurring(false);
     setIsCustomCategory(false);
     setCustomCategory('');
+    setManualSplits({});
+    setPaidBy(members.length > 0 ? members[0].id : '');
+    setSplitType('equal');
+    setSelectedMemberIds(members.map(m => m.id));
+    setDate(new Date().toISOString().split('T')[0]);
   };
 
   return (
@@ -257,7 +327,9 @@ export function AddExpenseDialog({ open, onOpenChange }: AddExpenseDialogProps) 
               <Label>Payer (Member)</Label>
               <Select value={paidBy} onValueChange={setPaidBy}>
                 <SelectTrigger className="bg-background">
-                  <SelectValue />
+                  <SelectValue placeholder="Select Payer">
+                    {members.find(m => m.id === paidBy)?.name}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {members.map(m => (
