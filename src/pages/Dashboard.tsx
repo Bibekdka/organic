@@ -39,12 +39,14 @@ import {
 import { collection, query, onSnapshot, orderBy } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { handleFirestoreError, OperationType } from '@/lib/firestore-errors';
-import { cn, downloadPDFFile } from '@/lib/utils';
+import { cn, downloadPDFFile, calculateSettlements } from '@/lib/utils';
 import { getSpendingInsights } from '@/services/geminiService';
 import { AddExpenseDialog } from '@/components/AddExpenseDialog';
 import { Plus } from 'lucide-react';
+import { useAuthStore } from '@/store/useAuthStore';
 
 export function Dashboard() {
+  const { user } = useAuthStore();
   const [stats, setStats] = React.useState({
     totalMembers: 0,
     totalSpent: 0,
@@ -124,6 +126,91 @@ export function Dashboard() {
       head: [['Description', 'Amount', 'Date', 'Paid By', 'Category']],
       body: tableData,
       startY: 35,
+      theme: 'grid',
+      headStyles: { fillColor: [79, 70, 229] }
+    });
+
+    const { balances, settlements } = calculateSettlements(stats.members, stats.allExpenses);
+
+    // Identify current user's member object
+    const myMember = stats.members.find(
+      m => m.userId === user?.uid || (user?.email && m.email === user.email)
+    );
+
+    const peopleWhoOweMe = settlements.filter(s => myMember && s.to === myMember.id);
+    const peopleIOwe = settlements.filter(s => myMember && s.from === myMember.id);
+
+    // Check Y position of the last table
+    let currentY = (doc as any).lastAutoTable.finalY + 15;
+    if (currentY > 210) {
+      doc.addPage();
+      currentY = 20;
+    }
+
+    doc.setFontSize(14);
+    doc.text("Group Balance & Settlements", 14, currentY);
+    doc.setFontSize(9);
+    doc.setTextColor(100, 116, 139);
+    doc.text("Optimized debt simplification and net dues calculations.", 14, currentY + 6);
+    doc.setTextColor(0, 0, 0);
+
+    let nextY = currentY + 12;
+
+    // Callout box for "Personal Overview (Me)"
+    if (myMember) {
+      doc.setFillColor(243, 244, 246); // soft light grey bg
+      doc.rect(14, nextY, 182, 28, "F");
+      
+      doc.setFontSize(10);
+      doc.setFont("Helvetica", "bold");
+      doc.text(`Personal Dues Hub (${myMember.name})`, 18, nextY + 6);
+      doc.setFont("Helvetica", "normal");
+      doc.setFontSize(9);
+
+      const netBal = balances[myMember.id] || 0;
+      const balStr = netBal >= 0 
+        ? `Owed to you: +₹${netBal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+        : `You owe: -₹${Math.abs(netBal).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      
+      doc.text(balStr, 18, nextY + 12);
+
+      let oweDetailsStr: string;
+      if (peopleWhoOweMe.length > 0) {
+        const detailLines = peopleWhoOweMe.map(s => {
+          const payerName = stats.members.find(m => m.id === s.from)?.name || "Member";
+          return `${payerName} owes you ₹${s.amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        });
+        oweDetailsStr = `They need to give you: ${detailLines.join(', ')}`;
+      } else if (netBal > 0) {
+        oweDetailsStr = "You are owed a net refund from the pool.";
+      } else if (netBal < 0 && peopleIOwe.length > 0) {
+        const detailLines = peopleIOwe.map(s => {
+          const receiverName = stats.members.find(m => m.id === s.to)?.name || "Member";
+          return `You owe ${receiverName} ₹${s.amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        });
+        oweDetailsStr = `You need to settle up with: ${detailLines.join(', ')}`;
+      } else {
+        oweDetailsStr = "Your ledger is perfectly balanced. No one owes you, and you owe no one!";
+      }
+
+      doc.text(doc.splitTextToSize(oweDetailsStr, 174), 18, nextY + 18);
+      nextY += 34;
+    }
+
+    const settlementRows = settlements.map(s => {
+      const debtorName = stats.members.find(m => m.id === s.from)?.name || `Member (${s.from.substring(0, 5)}...)`;
+      const creditorName = stats.members.find(m => m.id === s.to)?.name || `Member (${s.to.substring(0, 5)}...)`;
+      return [
+        debtorName,
+        creditorName,
+        `₹${s.amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+      ];
+    });
+
+    autoTable(doc, {
+      head: [['Sender (Debtor)', 'Receiver (Creditor)', 'Settlement Amount']],
+      body: settlementRows.length > 0 ? settlementRows : [['Balanced', 'Balanced', 'No settlements pending']],
+      startY: nextY,
       theme: 'grid',
       headStyles: { fillColor: [79, 70, 229] }
     });

@@ -446,3 +446,57 @@ export function downloadPDFFile(doc: any, filename: string, openInNewTab: boolea
   }
 }
 
+export interface Settlement {
+  from: string;
+  to: string;
+  amount: number;
+}
+
+export function calculateSettlements(members: any[], expenses: any[]) {
+  if (members.length === 0) return { balances: {} as Record<string, number>, settlements: [] as Settlement[] };
+
+  const balances: Record<string, number> = {};
+  members.forEach(m => balances[m.id] = 0);
+
+  expenses.forEach((expense: any) => {
+    balances[expense.paidBy] = (balances[expense.paidBy] || 0) + (expense.amount || 0);
+    expense.splits?.forEach((split: any) => {
+      balances[split.memberId] = (balances[split.memberId] || 0) - (split.amount || 0);
+    });
+  });
+
+  const debtors = Object.entries(balances)
+    .filter(([, bal]) => bal < -0.01)
+    .sort((a, b) => a[1] - b[1]);
+
+  const creditors = Object.entries(balances)
+    .filter(([, bal]) => bal > 0.01)
+    .sort((a, b) => b[1] - a[1]);
+
+  const settlements: Settlement[] = [];
+  let dIdx = 0;
+  let cIdx = 0;
+
+  const tempDebtors = debtors.map(d => ({ id: d[0], amount: Math.abs(d[1]) }));
+  const tempCreditors = creditors.map(c => ({ id: c[0], amount: c[1] }));
+
+  while (dIdx < tempDebtors.length && cIdx < tempCreditors.length) {
+    const debtor = tempDebtors[dIdx];
+    const creditor = tempCreditors[cIdx];
+    const amount = Math.min(debtor.amount, creditor.amount);
+
+    if (amount > 0.01) {
+      settlements.push({ from: debtor.id, to: creditor.id, amount });
+    }
+
+    debtor.amount -= amount;
+    creditor.amount -= amount;
+
+    if (debtor.amount < 0.01) dIdx++;
+    if (creditor.amount < 0.01) cIdx++;
+  }
+
+  return { balances, settlements };
+}
+
+
