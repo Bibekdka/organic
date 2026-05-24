@@ -29,7 +29,7 @@ import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
-import { downloadPDFFile, printActivityReportHTML } from '@/lib/utils';
+import { downloadPDFFile, printActivityReportHTML, calculateSettlements } from '@/lib/utils';
 
 export function SettingsPage() {
   const { user } = useAuthStore();
@@ -175,15 +175,99 @@ export function SettingsPage() {
       currentY = (doc as any).lastAutoTable.finalY + 12;
 
       // Check if page overflow
-      if (currentY > 250) {
+      if (currentY > 210) {
         doc.addPage();
         currentY = 20;
       }
 
-      // Section 3: Tasks Board
+      // Section 3: Group Balance & Settlements
       doc.setFontSize(14);
       doc.setTextColor(30, 41, 59);
-      doc.text("3. Tasks & Backlog Board", 14, currentY);
+      doc.text("3. Group Balance & Settlements", 14, currentY);
+      currentY += 4;
+
+      const { balances, settlements } = calculateSettlements(members, expenses);
+
+      // Personal overview helper if user can be matched
+      const myMember = members.find(
+        (m: any) => m.userId === user?.uid || (user?.email && m.email === user.email)
+      );
+
+      const peopleWhoOweMe = settlements.filter((s: any) => myMember && s.to === myMember.id);
+      const peopleIOwe = settlements.filter((s: any) => myMember && s.from === myMember.id);
+
+      if (myMember) {
+        // Draw a light background rectangle for personal info
+        doc.setFillColor(243, 244, 246);
+        doc.rect(14, currentY, 182, 28, "F");
+
+        doc.setFontSize(10);
+        doc.setFont("Helvetica", "bold");
+        doc.text(`Personal Dues Hub (${myMember.name})`, 18, currentY + 6);
+        doc.setFont("Helvetica", "normal");
+        doc.setFontSize(9);
+
+        const netBal = balances[myMember.id] || 0;
+        const balStr = netBal >= 0 
+          ? `Owed to you: +₹${netBal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+          : `You owe: -₹${Math.abs(netBal).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        
+        doc.text(balStr, 18, currentY + 12);
+
+        let oweDetailsStr: string;
+        if (peopleWhoOweMe.length > 0) {
+          const detailLines = peopleWhoOweMe.map((s: any) => {
+            const payerName = members.find((m: any) => m.id === s.from)?.name || "Member";
+            return `${payerName} owes you ₹${s.amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+          });
+          oweDetailsStr = `They need to give you: ${detailLines.join(', ')}`;
+        } else if (netBal > 0) {
+          oweDetailsStr = "You are owed a net refund from the pool.";
+        } else if (netBal < 0 && peopleIOwe.length > 0) {
+          const detailLines = peopleIOwe.map((s: any) => {
+            const receiverName = members.find((m: any) => m.id === s.to)?.name || "Member";
+            return `You owe ${receiverName} ₹${s.amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+          });
+          oweDetailsStr = `You need to settle up with: ${detailLines.join(', ')}`;
+        } else {
+          oweDetailsStr = "Your ledger is perfectly balanced. No one owes you, and you owe no one!";
+        }
+
+        doc.text(doc.splitTextToSize(oweDetailsStr, 174), 18, currentY + 18);
+        currentY += 34;
+      }
+
+      const settlementRows = settlements.map((s: any) => {
+        const debtorName = members.find((m: any) => m.id === s.from)?.name || `Member (${s.from.substring(0, 5)}...)`;
+        const creditorName = members.find((m: any) => m.id === s.to)?.name || `Member (${s.to.substring(0, 5)}...)`;
+        return [
+          debtorName,
+          creditorName,
+          `₹${s.amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+        ];
+      });
+
+      autoTable(doc, {
+        head: [['Sender (Debtor)', 'Receiver (Creditor)', 'Settlement Amount']],
+        body: settlementRows.length > 0 ? settlementRows : [['Balanced', 'Balanced', 'No settlements pending']],
+        startY: currentY,
+        theme: 'grid',
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: [79, 70, 229], textColor: [255, 255, 255] }
+      });
+
+      currentY = (doc as any).lastAutoTable.finalY + 12;
+
+      // Check page overflow
+      if (currentY > 240) {
+        doc.addPage();
+        currentY = 20;
+      }
+
+      // Section 4: Tasks Board
+      doc.setFontSize(14);
+      doc.setTextColor(30, 41, 59);
+      doc.text("4. Tasks & Backlog Board", 14, currentY);
       currentY += 4;
 
       const tasksData = tasks.length > 0 ? tasks.map(task => [
@@ -243,7 +327,7 @@ export function SettingsPage() {
       const membersSnapshot = await getDocs(collection(db, 'members'));
       const members = membersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
 
-      printActivityReportHTML(incomes, expenses, tasks, members);
+      printActivityReportHTML(incomes, expenses, tasks, members, user);
       toast.success("Safe print/PDF preview window launched successfully!");
     } catch (e: any) {
       console.error(e);

@@ -39,10 +39,94 @@ export function getUserAttribution() {
  * It generates a visually jaw-dropping vector layout directly inside the Chrome
  * Native print subsystem, enabling instant print or "Save as PDF" at native resolution.
  */
-export function printActivityReportHTML(incomes: any[], expenses: any[], tasks: any[], members: any[]) {
+export function printActivityReportHTML(incomes: any[], expenses: any[], tasks: any[], members: any[], user?: any) {
   const totalIncome = incomes.reduce((sum, inc) => sum + (inc.amount || 0), 0);
   const totalExpense = expenses.reduce((sum, exp) => sum + (exp.amount || 0), 0);
   const netBalance = totalIncome - totalExpense;
+
+  const { balances, settlements } = calculateSettlements(members, expenses);
+
+  // Identify current user's member object if user is provided
+  const myMember = user ? members.find((m: any) => m.userId === user?.uid || (user?.email && m.email === user.email)) : null;
+  const peopleWhoOweMe = settlements.filter((s: any) => myMember && s.to === myMember.id);
+  const peopleIOwe = settlements.filter((s: any) => myMember && s.from === myMember.id);
+
+  let personalBoxHtml = '';
+  if (myMember) {
+    const netBal = balances[myMember.id] || 0;
+    const isCredit = netBal >= 0;
+    const balColor = isCredit ? '#10b981' : '#ef4444';
+    const absBal = Math.abs(netBal).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const balText = isCredit ? `Owed to you: +₹${absBal}` : `You owe: -₹${absBal}`;
+
+    let detailsText: string;
+    if (peopleWhoOweMe.length > 0) {
+      const list = peopleWhoOweMe.map((s: any) => {
+        const debtorName = members.find((m: any) => m.id === s.from)?.name || "Member";
+        return `<strong>${debtorName}</strong> owes you ₹${s.amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      }).join(', ');
+      detailsText = `These payments need to be made to you: ${list}.`;
+    } else if (netBal > 0) {
+      detailsText = "You are owed a net share from the cooperative pool.";
+    } else if (netBal < 0 && peopleIOwe.length > 0) {
+      const list = peopleIOwe.map((s: any) => {
+        const receiverName = members.find((m: any) => m.id === s.to)?.name || "Member";
+        return `You need to pay <strong>${receiverName}</strong> ₹${s.amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      }).join(', ');
+      detailsText = `You need to settle up with: ${list}.`;
+    } else {
+      detailsText = "Your ledger is perfectly balanced. No dues pending!";
+    }
+
+    personalBoxHtml = `
+      <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-left: 4px solid #4f46e5; border-radius: 12px; padding: 16px; margin-bottom: 24px; text-align: left;">
+        <h4 style="margin: 0 0 6px 0; font-size: 13px; font-weight: 700; color: #0f172a;">Personal Settlement Overview (${myMember.name})</h4>
+        <div style="font-size: 14px; font-weight: 700; color: ${balColor}; margin-bottom: 8px;">${balText}</div>
+        <p style="margin: 0; font-size: 12px; color: #475569; line-height: 1.5;">${detailsText}</p>
+      </div>
+    `;
+  }
+
+  const settlementsRowsHtml = settlements.length > 0 ? settlements.map((s: any) => {
+    const debtorName = members.find((m: any) => m.id === s.from)?.name || `Member (${s.from.substring(0, 5)})`;
+    const creditorName = members.find((m: any) => m.id === s.to)?.name || `Member (${s.to.substring(0, 5)})`;
+    return `
+      <tr style="border-bottom: 1px solid #f1f5f9;">
+        <td style="padding: 10px 12px; color: #1e293b; font-weight: 600;">${debtorName}</td>
+        <td style="padding: 10px 12px; color: #1e293b; font-weight: 600;">${creditorName}</td>
+        <td style="padding: 10px 12px; font-weight: 700; color: #4f46e5;">₹${s.amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+      </tr>
+    `;
+  }).join('') : `
+    <tr>
+      <td colspan="3" style="text-align: center; padding: 20px; color: #94a3b8; font-style: italic;">All debts are fully settled! No payments pending.</td>
+    </tr>
+  `;
+
+  const memberBalancesHtml = members.length > 0 ? members.map((m: any) => {
+    const netBal = balances[m.id] || 0;
+    const isCredit = netBal >= 0.01;
+    const isDebit = netBal <= -0.01;
+    const statusText = isCredit 
+      ? `Owed +₹${netBal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` 
+      : isDebit 
+        ? `Owes ₹${Math.abs(netBal).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+        : 'Settled';
+    const badgeBg = isCredit ? '#f0fdf4' : isDebit ? '#fef2f2' : '#f1f5f9';
+    const badgeColor = isCredit ? '#15803d' : isDebit ? '#b91c1c' : '#475569';
+
+    return `
+      <tr style="border-bottom: 1px solid #f1f5f9;">
+        <td style="padding: 10px 12px; color: #1e293b; font-weight: 500;">${m.name}</td>
+        <td style="padding: 10px 12px; color: #475569;">${m.email || 'No email'}</td>
+        <td style="padding: 10px 12px; text-align: right;"><span style="background-color: ${badgeBg}; color: ${badgeColor}; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 600;">${statusText}</span></td>
+      </tr>
+    `;
+  }).join('') : `
+    <tr>
+      <td colspan="3" style="text-align: center; padding: 20px; color: #94a3b8; font-style: italic;">No members found.</td>
+    </tr>
+  `;
 
   const printWindow = window.open('', '_blank');
   if (!printWindow) {
@@ -346,7 +430,43 @@ export function printActivityReportHTML(incomes: any[], expenses: any[], tasks: 
           </tbody>
         </table>
 
-        <div class="section-title">3. Tasks Board</div>
+        <div class="section-title">3. Group Balance & Settlements</div>
+        ${personalBoxHtml}
+        
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 30px;">
+          <div>
+            <h4 style="margin: 0 0 10px 0; font-size: 13px; font-weight: 700; color: #0f172a;">Simplified Settlements</h4>
+            <table style="margin-bottom: 0;">
+              <thead>
+                <tr>
+                  <th style="width: 35%;">Sender (Debtor)</th>
+                  <th style="width: 35%;">Receiver (Creditor)</th>
+                  <th style="width: 30%;">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${settlementsRowsHtml}
+              </tbody>
+            </table>
+          </div>
+          <div>
+            <h4 style="margin: 0 0 10px 0; font-size: 13px; font-weight: 700; color: #0f172a;">Cooperative Member Standings</h4>
+            <table style="margin-bottom: 0;">
+              <thead>
+                <tr>
+                  <th style="width: 35%;">Member Name</th>
+                  <th style="width: 35%;">Contact Email</th>
+                  <th style="width: 30%; text-align: right;">Net Balance</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${memberBalancesHtml}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="section-title">4. Tasks Board</div>
         <table>
           <thead>
             <tr>
