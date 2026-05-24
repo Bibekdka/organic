@@ -39,7 +39,7 @@ import {
 import { collection, query, onSnapshot, orderBy } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { handleFirestoreError, OperationType } from '@/lib/firestore-errors';
-import { cn } from '@/lib/utils';
+import { cn, downloadPDFFile } from '@/lib/utils';
 import { getSpendingInsights } from '@/services/geminiService';
 import { AddExpenseDialog } from '@/components/AddExpenseDialog';
 import { Plus } from 'lucide-react';
@@ -111,7 +111,8 @@ export function Dashboard() {
       headStyles: { fillColor: [79, 70, 229] }
     });
 
-    doc.save(`financial_report_${new Date().toISOString().split('T')[0]}.pdf`);
+    const reportName = `financial_report_${new Date().toISOString().split('T')[0]}.pdf`;
+    downloadPDFFile(doc, reportName);
   };
 
   const handleExportExcel = () => {

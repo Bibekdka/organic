@@ -5,7 +5,6 @@ import {
   MapPin, 
   ShieldCheck, 
   Database,
-  Cloud,
   ChevronRight,
   Save,
   Loader2,
@@ -30,6 +29,7 @@ import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
+import { downloadPDFFile } from '@/lib/utils';
 
 export function SettingsPage() {
   const { user } = useAuthStore();
@@ -45,7 +45,7 @@ export function SettingsPage() {
     }, 1000);
   };
 
-  const handleExportAllPDF = async () => {
+  const handleExportAllPDF = async (openInNewTab: boolean = false) => {
     setIsExportingPDF(true);
     try {
       // 1. Fetch expenses
@@ -213,8 +213,9 @@ export function SettingsPage() {
         doc.text("Organic-O-Eats Data Export System", 140, 287);
       }
 
-      doc.save(`organicoeats_activity_report_${new Date().toISOString().split('T')[0]}.pdf`);
-      toast.success("Activity PDF exported successfully!");
+      const reportName = `organicoeats_activity_report_${new Date().toISOString().split('T')[0]}.pdf`;
+      downloadPDFFile(doc, reportName, openInNewTab);
+      toast.success(openInNewTab ? "PDF report generated and opened!" : "Activity PDF exported successfully!");
     } catch (e: any) {
       console.error(e);
       toast.error(`Export failed: ${e.message || e}`);
@@ -409,22 +410,33 @@ export function SettingsPage() {
                          </p>
                       </div>
                    </div>
-                   <Button 
-                      size="sm" 
-                      variant="outline" 
-                      onClick={handleExportAllPDF}
-                      disabled={isExportingPDF}
-                      className="border-rose-500/35 hover:bg-rose-500/10 text-rose-600 hover:text-rose-700 min-w-[125px] font-semibold"
-                   >
-                      {isExportingPDF ? (
-                         <>
-                            <Loader2 className="w-3.5 h-3.5 animate-spin mr-2" />
-                            Compiling...
-                         </>
-                      ) : (
-                         "Download PDF"
-                      )}
-                   </Button>
+                   <div className="flex flex-row flex-wrap sm:flex-nowrap gap-2 w-full sm:w-auto self-stretch sm:self-auto justify-end">
+                      <Button 
+                         size="sm" 
+                         variant="outline" 
+                         onClick={() => handleExportAllPDF(false)}
+                         disabled={isExportingPDF}
+                         className="border-rose-500/35 hover:bg-rose-500/10 text-rose-600 hover:text-rose-700 min-w-[125px] font-semibold"
+                      >
+                         {isExportingPDF ? (
+                            <>
+                               <Loader2 className="w-3.5 h-3.5 animate-spin mr-2" />
+                               Compiling...
+                            </>
+                         ) : (
+                            "Download PDF"
+                         )}
+                      </Button>
+                      <Button 
+                         size="sm" 
+                         variant="ghost" 
+                         onClick={() => handleExportAllPDF(true)}
+                         disabled={isExportingPDF}
+                         className="text-rose-600 hover:text-rose-700 hover:bg-rose-500/5 font-semibold min-w-[110px]"
+                      >
+                         Preview / Print
+                      </Button>
+                   </div>
                 </div>
 
                 {/* Excel Export Block */}

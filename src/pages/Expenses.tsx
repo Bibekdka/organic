@@ -53,7 +53,7 @@ import { AddExpenseDialog } from '@/components/AddExpenseDialog';
 
 import { collection, query, onSnapshot, orderBy, deleteDoc, doc, addDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { getUserAttribution } from '@/lib/utils';
+import { getUserAttribution, downloadPDFFile } from '@/lib/utils';
 import { handleFirestoreError, OperationType } from '@/lib/firestore-errors';
 import { toast } from 'sonner';
 
@@ -133,7 +133,8 @@ export function ExpensesPage() {
       headStyles: { fillColor: [79, 70, 229] }
     });
 
-    doc.save(`expenses_${new Date().toISOString().split('T')[0]}.pdf`);
+    const reportName = `expenses_${new Date().toISOString().split('T')[0]}.pdf`;
+    downloadPDFFile(doc, reportName);
   };
 
   /**
