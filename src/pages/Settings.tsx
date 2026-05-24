@@ -29,7 +29,7 @@ import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
-import { downloadPDFFile } from '@/lib/utils';
+import { downloadPDFFile, printActivityReportHTML } from '@/lib/utils';
 
 export function SettingsPage() {
   const { user } = useAuthStore();
@@ -219,6 +219,35 @@ export function SettingsPage() {
     } catch (e: any) {
       console.error(e);
       toast.error(`Export failed: ${e.message || e}`);
+    } finally {
+      setIsExportingPDF(false);
+    }
+  };
+
+  const handlePrintHTMLBypass = async () => {
+    setIsExportingPDF(true);
+    try {
+      // 1. Fetch expenses
+      const expensesSnapshot = await getDocs(query(collection(db, 'expenses'), orderBy('date', 'desc')));
+      const expenses = expensesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
+
+      // 2. Fetch incomes
+      const incomesSnapshot = await getDocs(query(collection(db, 'incomes'), orderBy('date', 'desc')));
+      const incomes = incomesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
+
+      // 3. Fetch tasks
+      const tasksSnapshot = await getDocs(query(collection(db, 'tasks'), orderBy('createdAt', 'desc')));
+      const tasks = tasksSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
+
+      // 4. Fetch members
+      const membersSnapshot = await getDocs(collection(db, 'members'));
+      const members = membersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
+
+      printActivityReportHTML(incomes, expenses, tasks, members);
+      toast.success("Safe print/PDF preview window launched successfully!");
+    } catch (e: any) {
+      console.error(e);
+      toast.error(`Print rendering failed: ${e.message || e}`);
     } finally {
       setIsExportingPDF(false);
     }
@@ -434,10 +463,24 @@ export function SettingsPage() {
                          disabled={isExportingPDF}
                          className="text-rose-600 hover:text-rose-700 hover:bg-rose-500/5 font-semibold min-w-[110px]"
                       >
-                         Preview / Print
-                      </Button>
-                   </div>
-                </div>
+                         Preview Dashboard
+                       </Button>
+                       <Button 
+                          size="sm" 
+                          variant="default" 
+                          onClick={handlePrintHTMLBypass}
+                          disabled={isExportingPDF}
+                          className="bg-rose-600 hover:bg-rose-700 text-white font-semibold min-w-[180px] shadow-sm shadow-rose-500/25"
+                       >
+                          Print / Save (Bypass Errors)
+                       </Button>
+                    </div>
+                 </div>
+                 <div className="text-[11px] text-rose-600/90 leading-relaxed font-normal bg-rose-500/5 p-3 rounded-lg border border-rose-500/10 hover:bg-rose-500/10 transition-colors mt-2">
+                    ⚠️ <strong>Antivirus Block (Virus scan failed)?</strong> If your organization's browser security blocks raw file downloads, click the <strong>Print / Save (Bypass Errors)</strong> button. This compiles the report into a clean print-preview page and opens your browser's safe native print dialog (immune to false-positive scanner blocks). Under destination, select <strong>"Save as PDF"</strong>.
+                 </div>
+                 
+
 
                 {/* Excel Export Block */}
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-5 bg-emerald-500/5 rounded-xl border border-dashed border-emerald-500/20 gap-4">

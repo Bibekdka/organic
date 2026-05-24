@@ -174,17 +174,17 @@ function StickyNote({ task, assignee, onDelete, onEdit, onUpdateStatus }: Sticky
                 </Button>
               } />
               <DropdownMenuContent align="end" className="w-48 text-foreground">
-                <DropdownMenuItem onSelect={onEdit} className="text-xs">
+                <DropdownMenuItem onClick={onEdit} className="text-xs cursor-pointer">
                   <Pencil className="w-3.5 h-3.5 mr-2" /> Edit Details
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 {STATUS_COLUMNS.map(col => (
-                  <DropdownMenuItem key={col.id} onSelect={() => onUpdateStatus(col.id)} className="text-xs">
+                  <DropdownMenuItem key={col.id} onClick={() => onUpdateStatus(col.id)} className="text-xs cursor-pointer">
                     Move to {col.label}
                   </DropdownMenuItem>
                 ))}
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={onDelete} className="text-xs text-rose-500">
+                <DropdownMenuItem onClick={onDelete} className="text-xs text-rose-500 cursor-pointer">
                   <Trash2 className="w-3.5 h-3.5 mr-2" /> Delete
                 </DropdownMenuItem>
               </DropdownMenuContent>

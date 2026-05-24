@@ -57,6 +57,21 @@ export function Dashboard() {
   const [loadingInsights, setLoadingInsights] = React.useState(false);
   const [isAddOpen, setIsAddOpen] = React.useState(false);
 
+  const hasFetchedInsights = React.useRef(false);
+
+  const generateAIReview = React.useCallback(async (expenses: any[]) => {
+    if (loadingInsights || expenses.length === 0) return;
+    setLoadingInsights(true);
+    try {
+        const result = await getSpendingInsights(expenses);
+        setInsights(result);
+    } catch (error) {
+        window.console.error("AI Insight error:", error);
+    } finally {
+        setLoadingInsights(false);
+    }
+  }, [loadingInsights]);
+
   React.useEffect(() => {
     // Listen to Members
     const unsubMembers = onSnapshot(collection(db, 'members'), (snapshot) => {
@@ -77,7 +92,9 @@ export function Dashboard() {
       }));
       setLoading(false);
       
-      if (expenses.length > 0) {
+      // Fetch initial insights exactly once on first stable database snapshot
+      if (expenses.length > 0 && !hasFetchedInsights.current) {
+        hasFetchedInsights.current = true;
         generateAIReview(expenses);
       }
     }, (err) => handleFirestoreError(err, OperationType.LIST, 'expenses'));
@@ -86,7 +103,7 @@ export function Dashboard() {
       unsubMembers();
       unsubExpenses();
     };
-  }, []);
+  }, [generateAIReview]);
 
   const handleExportPDF = () => {
     const doc = new jsPDF();
@@ -147,18 +164,7 @@ export function Dashboard() {
       .sort((a, b) => b.balance - a.balance);
   }, [stats.members, stats.allExpenses]);
 
-  const generateAIReview = async (expenses: any[]) => {
-    if (loadingInsights) return;
-    setLoadingInsights(true);
-    try {
-        const result = await getSpendingInsights(expenses);
-        setInsights(result);
-    } catch (error) {
-        window.console.error("AI Insight error:", error);
-    } finally {
-        setLoadingInsights(false);
-    }
-  };
+
 
   const categoryData = React.useMemo(() => {
     const cats: Record<string, number> = {};
@@ -193,10 +199,10 @@ export function Dashboard() {
               </Button>
             } />
             <DropdownMenuContent align="end" className="w-48 text-foreground">
-                 <DropdownMenuItem onSelect={handleExportPDF} className="gap-2">
+                 <DropdownMenuItem onClick={handleExportPDF} className="gap-2 cursor-pointer">
                     <FileDown className="w-4 h-4 text-rose-500" /> Export PDF
                  </DropdownMenuItem>
-                 <DropdownMenuItem onSelect={handleExportExcel} className="gap-2">
+                 <DropdownMenuItem onClick={handleExportExcel} className="gap-2 cursor-pointer">
                     <FileSpreadsheet className="w-4 h-4 text-emerald-500" /> Export Excel
                  </DropdownMenuItem>
               </DropdownMenuContent>
@@ -204,7 +210,20 @@ export function Dashboard() {
            <Button onClick={() => setIsAddOpen(true)} size="sm" className="h-9 shadow-lg shadow-primary/20 gap-2 text-xs">
               <Plus className="w-4 h-4" /> <span className="hidden xs:inline">Log Entry</span><span className="xs:hidden">Log</span>
            </Button>
-           <Button size="sm" variant="ghost" className="hidden sm:flex text-muted-foreground">Refresh Insights</Button>
+           <Button 
+              onClick={() => generateAIReview(stats.allExpenses)} 
+              disabled={loadingInsights} 
+              size="sm" 
+              variant="ghost" 
+              className="hidden sm:flex text-muted-foreground hover:text-foreground gap-2 h-9 text-xs"
+           >
+              {loadingInsights ? (
+                 <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />
+              ) : (
+                 <Sparkles className="w-3.5 h-3.5 text-primary" />
+              )}
+              Refresh AI
+           </Button>
         </div>
       </div>
 

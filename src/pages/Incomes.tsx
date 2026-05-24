@@ -271,8 +271,8 @@ export function IncomesPage() {
                         </Button>
                       } />
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onSelect={() => deleteIncome(income.id)} className="text-rose-500">
-                          <Trash2 className="w-4 h-4 mr-2" /> Delete
+                        <DropdownMenuItem onClick={() => deleteIncome(income.id)} className="text-rose-500 cursor-pointer">
+                           <Trash2 className="w-4 h-4 mr-2" /> Delete
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>

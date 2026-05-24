@@ -484,10 +484,10 @@ export function MembersPage() {
                             </Button>
                           } />
                           <DropdownMenuContent align="end" className="w-56 p-1 text-foreground">
-                            <DropdownMenuItem onSelect={() => viewProfile(member)} className="gap-2 text-xs py-2">
+                            <DropdownMenuItem onClick={() => viewProfile(member)} className="gap-2 text-xs py-2 cursor-pointer">
                                <FileText className="w-3.5 h-3.5" /> View Member Profile
                             </DropdownMenuItem>
-                            <DropdownMenuItem onSelect={() => openEditDialog(member)} className="gap-2 text-xs py-2">
+                            <DropdownMenuItem onClick={() => openEditDialog(member)} className="gap-2 text-xs py-2 cursor-pointer">
                                <Pencil className="w-3.5 h-3.5" /> Edit Details
                             </DropdownMenuItem>
                             
@@ -508,8 +508,8 @@ export function MembersPage() {
 
                             <DropdownMenuSeparator />
                             <DropdownMenuItem 
-                              onSelect={() => deleteMember(member.id)}
-                              className="gap-2 text-xs py-2 text-destructive focus:text-destructive"
+                              onClick={() => deleteMember(member.id)}
+                              className="gap-2 text-xs py-2 text-destructive focus:text-destructive cursor-pointer"
                             >
                               <Trash2 className="w-3.5 h-3.5" /> Remove Member
                             </DropdownMenuItem>
@@ -549,17 +549,17 @@ export function MembersPage() {
                         </Button>
                       } />
                       <DropdownMenuContent align="end" className="w-56 p-1 text-foreground">
-                        <DropdownMenuItem onSelect={() => viewProfile(member)} className="text-xs py-2 gap-2">
+                        <DropdownMenuItem onClick={() => viewProfile(member)} className="text-xs py-2 gap-2 cursor-pointer">
                            <FileText className="w-3.5 h-3.5" /> Profile
                         </DropdownMenuItem>
-                        <DropdownMenuItem onSelect={() => openEditDialog(member)} className="text-xs py-2 gap-2">
+                        <DropdownMenuItem onClick={() => openEditDialog(member)} className="text-xs py-2 gap-2 cursor-pointer">
                            <Pencil className="w-3.5 h-3.5" /> Edit
                         </DropdownMenuItem>
                         <DropdownMenuItem 
-                          onSelect={() => deleteMember(member.id)}
-                          className="text-xs py-2 gap-2 text-destructive"
+                          onClick={() => deleteMember(member.id)}
+                          className="text-xs py-2 gap-2 text-destructive cursor-pointer"
                         >
-                          <Trash2 className="w-3.5 h-3.5" /> Delete
+                           <Trash2 className="w-3.5 h-3.5" /> Delete
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>

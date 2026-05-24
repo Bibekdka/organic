@@ -222,6 +222,13 @@ export function ExpensesPage() {
       
       // 1. Log the expense
       await addDoc(collection(db, 'expenses'), {
+        description: expenseData.description || 'Recurring Expense Execution',
+        amount: Number(expenseData.amount) || 0,
+        category: expenseData.category || 'General',
+        paidBy: expenseData.paidBy || '',
+        splitType: expenseData.splitType || 'equal',
+        splits: Array.isArray(expenseData.splits) ? expenseData.splits : [],
+        isRecurring: expenseData.isRecurring !== undefined ? expenseData.isRecurring : true,
         ...expenseData,
         date: new Date().toISOString().split('T')[0],
         createdAt: serverTimestamp(),
@@ -279,10 +286,10 @@ export function ExpensesPage() {
               </Button>
             } />
             <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem onSelect={handleExportPDF} className="gap-2 text-foreground">
+              <DropdownMenuItem onClick={handleExportPDF} className="gap-2 text-foreground cursor-pointer">
                 <FileDown className="w-4 h-4 text-rose-500" /> Export as PDF
               </DropdownMenuItem>
-              <DropdownMenuItem onSelect={handleExportExcel} className="gap-2 text-foreground">
+              <DropdownMenuItem onClick={handleExportExcel} className="gap-2 text-foreground cursor-pointer">
                 <FileSpreadsheet className="w-4 h-4 text-emerald-500" /> Export as Excel
               </DropdownMenuItem>
             </DropdownMenuContent>

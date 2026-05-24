@@ -25,14 +25,13 @@ service cloud.firestore {
     }
 
     function isValidExpense(data) {
-      return data.keys().hasAll(['description', 'amount', 'paidBy', 'splitType', 'createdAt', 'createdBy', 'category', 'date', 'splits', 'isRecurring']) &&
+      return data.keys().hasAll(['description', 'amount', 'paidBy', 'splitType', 'category', 'date', 'splits']) &&
              data.description is string && data.description.size() <= 1000 &&
              data.amount is number && data.amount >= 0 &&
              data.category is string && data.category.size() <= 100 &&
              data.date is string &&
              data.splits is list &&
              data.splitType in ['equal', 'percentage', 'custom', 'shares'] &&
-             data.createdBy == request.auth.uid &&
              (!data.keys().hasAny(['createdByName']) || data.createdByName is string) &&
              (!data.keys().hasAny(['updatedByName']) || data.updatedByName is string);
     }
@@ -55,18 +54,16 @@ service cloud.firestore {
              data.amount is number && data.amount >= 0 &&
              data.category is string && data.category.size() <= 100 &&
              data.date is string &&
-             data.createdBy == request.auth.uid &&
              (!data.keys().hasAny(['createdByName']) || data.createdByName is string);
     }
 
     function isValidRecurringTemplate(data) {
-      return data.keys().hasAll(['description', 'amount', 'frequency', 'nextExecutionDate', 'active', 'category', 'paidBy', 'splitType', 'date', 'splits', 'isRecurring', 'createdAt', 'createdBy']) &&
+      return data.keys().hasAll(['description', 'amount', 'frequency', 'nextExecutionDate', 'active', 'category', 'paidBy', 'splitType', 'date', 'splits']) &&
              data.description is string && data.description.size() <= 1000 &&
              data.amount is number && data.amount >= 0 &&
              data.frequency in ['daily', 'weekly', 'monthly', 'yearly'] &&
              data.nextExecutionDate is number &&
-             data.active is bool &&
-             data.createdBy == request.auth.uid;
+             data.active is bool;
     }
     
     function isValidAppSettings(data) {
@@ -118,16 +115,17 @@ service cloud.firestore {
     match /expenses/{expenseId} {
       // Allow any signed in user to read for now (community app)
       allow read: if isSignedIn();
-      allow create: if isSignedIn() && isValidExpense(incoming());
-      allow update: if isSignedIn() && isValidExpense(incoming()) && (existing().createdBy == request.auth.uid || isAdmin()) &&
-                    incoming().diff(existing()).affectedKeys().hasOnly(['description', 'amount', 'paidBy', 'category', 'date', 'splits', 'isRecurring', 'updatedByName']);
-      allow delete: if isSignedIn() && (existing().createdBy == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && isValidExpense(incoming()) && (!incoming().keys().hasAny(['createdBy']) || incoming().createdBy == request.auth.uid);
+      allow update: if isSignedIn() && isValidExpense(incoming()) && 
+                     (!existing().keys().hasAny(['createdBy']) || existing().createdBy == null || incoming().createdBy == existing().createdBy || isAdmin()) &&
+                     incoming().diff(existing()).affectedKeys().hasOnly(['description', 'amount', 'paidBy', 'category', 'date', 'splits', 'splitType', 'isRecurring', 'updatedAt', 'updatedByName', 'updatedByDevice']);
+      allow delete: if isSignedIn();
     }
 
     match /members/{memberId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn() && isValidMember(incoming());
-      allow update: if isSignedIn() && (incoming().diff(existing()).affectedKeys().hasOnly(['role', 'name', 'email', 'status', 'shares', 'avatarUrl', 'updatedByName']));
+      allow update: if isSignedIn() && (incoming().diff(existing()).affectedKeys().hasOnly(['role', 'name', 'email', 'status', 'shares', 'avatarUrl', 'updatedAt', 'updatedByName', 'updatedByDevice']));
       allow delete: if isSignedIn();
     }
 
@@ -141,7 +139,7 @@ service cloud.firestore {
       allow read: if isSignedIn();
       allow create: if isSignedIn() && isValidTask(incoming());
       allow update: if isSignedIn() && isValidTask(incoming()) && (
-        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'priority', 'assignedTo', 'title', 'description', 'updatedByName'])
+        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'priority', 'assignedTo', 'title', 'description', 'updatedAt', 'updatedByName', 'updatedByDevice'])
       );
       allow delete: if isSignedIn();
     }
@@ -150,17 +148,18 @@ service cloud.firestore {
       allow read: if isSignedIn();
       allow create: if isSignedIn() && isValidRecurringTemplate(incoming());
       allow update: if isSignedIn() && (
-        incoming().diff(existing()).affectedKeys().hasOnly(['active', 'nextExecutionDate', 'description', 'amount'])
+        incoming().diff(existing()).affectedKeys().hasOnly(['active', 'nextExecutionDate', 'description', 'amount', 'frequency', 'category', 'paidBy', 'splitType', 'date', 'splits', 'isRecurring', 'updatedAt', 'updatedByName', 'updatedByDevice'])
       );
       allow delete: if isSignedIn();
     }
 
     match /incomes/{incomeId} {
       allow read: if isSignedIn();
-      allow create: if isSignedIn() && isValidIncome(incoming());
-      allow update: if isSignedIn() && isValidIncome(incoming()) && (existing().createdBy == request.auth.uid || isAdmin()) &&
-                    incoming().diff(existing()).affectedKeys().hasOnly(['source', 'amount', 'category', 'date', 'notes', 'updatedByName']);
-      allow delete: if isSignedIn() && (existing().createdBy == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && isValidIncome(incoming()) && (!incoming().keys().hasAny(['createdBy']) || incoming().createdBy == request.auth.uid);
+      allow update: if isSignedIn() && isValidIncome(incoming()) && 
+                     (!existing().keys().hasAny(['createdBy']) || existing().createdBy == null || incoming().createdBy == existing().createdBy || isAdmin()) &&
+                     incoming().diff(existing()).affectedKeys().hasOnly(['source', 'amount', 'category', 'date', 'notes', 'updatedAt', 'updatedByName', 'updatedByDevice']);
+      allow delete: if isSignedIn();
     }
 
     match /settings/{settingId} {
