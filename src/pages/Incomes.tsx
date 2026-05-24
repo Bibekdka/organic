@@ -1,0 +1,410 @@
+import * as React from 'react';
+import { 
+  TrendingUp, 
+  Plus, 
+  Search, 
+  MoreVertical, 
+  Download, 
+  Trash2, 
+  Calendar,
+  Filter,
+  Loader2,
+  DollarSign,
+  ArrowUpRight
+} from 'lucide-react';
+import { 
+  collection, 
+  onSnapshot, 
+  query, 
+  addDoc, 
+  deleteDoc, 
+  doc, 
+  orderBy
+} from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { Income } from '@/types';
+import { getUserAttribution } from '@/lib/utils';
+import { handleFirestoreError, OperationType } from '@/lib/firestore-errors';
+import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { 
+  Table, 
+  TableBody, 
+  TableCell, 
+  TableHead, 
+  TableHeader, 
+  TableRow 
+} from '@/components/ui/table';
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogFooter,
+  DialogDescription
+} from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
+import { 
+  DropdownMenu, 
+  DropdownMenuContent, 
+  DropdownMenuItem, 
+  DropdownMenuTrigger 
+} from '@/components/ui/dropdown-menu';
+import { useAuthStore } from '@/store/useAuthStore';
+
+const INCOME_CATEGORIES = [
+  'Sales',
+  'Services',
+  'Grants',
+  'Donations',
+  'Interest',
+  'Other'
+];
+
+export function IncomesPage() {
+  const [incomes, setIncomes] = React.useState<Income[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [searchTerm, setSearchTerm] = React.useState('');
+  const [isAddOpen, setIsAddOpen] = React.useState(false);
+  const user = useAuthStore(state => state.user);
+
+  // Form state
+  const [source, setSource] = React.useState('');
+  const [amount, setAmount] = React.useState('');
+  const [category, setCategory] = React.useState('Sales');
+  const [date, setDate] = React.useState(new Date().toISOString().split('T')[0]);
+  const [notes, setNotes] = React.useState('');
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
+
+  React.useEffect(() => {
+    const q = query(collection(db, 'incomes'), orderBy('date', 'desc'));
+    const unsub = onSnapshot(q, (snapshot) => {
+      setIncomes(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Income)));
+      setLoading(false);
+    }, (error) => handleFirestoreError(error, OperationType.LIST, 'incomes'));
+
+    return unsub;
+  }, []);
+
+  const handleAddIncome = async () => {
+    if (!source || !amount || !user) return;
+    setIsSubmitting(true);
+    const attr = getUserAttribution();
+    try {
+      await addDoc(collection(db, 'incomes'), {
+        source,
+        amount: parseFloat(amount),
+        category,
+        date,
+        notes,
+        createdAt: Date.now(),
+        createdBy: attr.userId,
+        createdByName: attr.userName,
+        createdByDevice: attr.device
+      });
+      toast.success('Income recorded successfully');
+      setIsAddOpen(false);
+      resetForm();
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, 'incomes');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const resetForm = () => {
+    setSource('');
+    setAmount('');
+    setCategory('Sales');
+    setDate(new Date().toISOString().split('T')[0]);
+    setNotes('');
+  };
+
+  const deleteIncome = async (id: string) => {
+    if (!window.confirm('Delete this record?')) return;
+    try {
+      await deleteDoc(doc(db, 'incomes', id));
+      toast.success('Record deleted');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `incomes/${id}`);
+    }
+  };
+
+  const totalIncome = incomes.reduce((sum, inc) => sum + inc.amount, 0);
+
+  const filteredIncomes = incomes.filter(inc => 
+    inc.source.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    inc.category.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-black tracking-tight text-foreground flex items-center gap-2">
+            <TrendingUp className="w-8 h-8 text-emerald-500" />
+            Income Tracking
+          </h1>
+          <p className="text-muted-foreground mt-1 font-medium">Record and monitor organization inflows.</p>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="outline" className="gap-2 bg-card border-none shadow-sm text-foreground">
+            <Download className="w-4 h-4" /> Export
+          </Button>
+          <Button onClick={() => setIsAddOpen(true)} className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-200">
+            <Plus className="w-4 h-4" /> Add Income
+          </Button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="bg-emerald-500 rounded-2xl p-6 text-white shadow-xl shadow-emerald-100 flex flex-col justify-between">
+          <div className="flex justify-between items-start">
+            <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
+              <DollarSign className="w-6 h-6" />
+            </div>
+            <ArrowUpRight className="w-6 h-6 opacity-50" />
+          </div>
+          <div className="mt-8">
+            <p className="text-white/70 text-xs font-black uppercase tracking-widest">Total Revenue</p>
+            <h2 className="text-4xl font-black mt-2">₹{totalIncome.toLocaleString()}</h2>
+          </div>
+        </div>
+        
+        <div className="bg-card rounded-2xl p-6 border border-border/50 shadow-md flex flex-col justify-between">
+          <div className="flex justify-between items-start">
+            <div className="w-12 h-12 rounded-xl bg-orange-100 flex items-center justify-center text-orange-600">
+              <Calendar className="w-6 h-6" />
+            </div>
+          </div>
+          <div className="mt-8">
+            <p className="text-muted-foreground text-xs font-black uppercase tracking-widest">This Month</p>
+            <h2 className="text-4xl font-black mt-2 text-foreground">
+              ₹{incomes.filter(inc => {
+                const d = new Date(inc.date);
+                const now = new Date();
+                return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+              }).reduce((sum, inc) => sum + inc.amount, 0).toLocaleString()}
+            </h2>
+          </div>
+        </div>
+
+        <div className="bg-card rounded-2xl p-6 border border-border/50 shadow-md flex flex-col justify-between">
+          <div className="flex justify-between items-start">
+            <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center text-blue-600">
+              <Filter className="w-6 h-6" />
+            </div>
+          </div>
+          <div className="mt-8">
+            <p className="text-muted-foreground text-xs font-black uppercase tracking-widest">Transactions</p>
+            <h2 className="text-4xl font-black mt-2 text-foreground">{incomes.length}</h2>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-4">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input 
+            placeholder="Search source or category..." 
+            className="pl-10 h-11 bg-card border-none shadow-sm focus:ring-emerald-500 text-foreground"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
+        <Button variant="outline" className="h-11 bg-card border-none shadow-sm text-foreground">
+          <Filter className="w-4 h-4 mr-2" /> Categories
+        </Button>
+      </div>
+
+      <div className="bg-card rounded-2xl shadow-xl shadow-slate-200/50 border border-border/50 overflow-hidden relative min-h-[400px]">
+        {loading && (
+          <div className="absolute inset-0 bg-white/50 backdrop-blur-sm z-10 flex items-center justify-center">
+            <Loader2 className="w-8 h-8 animate-spin text-emerald-500" />
+          </div>
+        )}
+        
+        {/* Desktop View Table */}
+        <div className="hidden md:block">
+          <Table>
+            <TableHeader className="bg-muted/30">
+              <TableRow className="border-none">
+                <TableHead className="w-[300px] text-[10px] font-black uppercase tracking-widest px-6">Source</TableHead>
+                <TableHead className="text-[10px] font-black uppercase tracking-widest">Category</TableHead>
+                <TableHead className="text-[10px] font-black uppercase tracking-widest text-center">Date</TableHead>
+                <TableHead className="text-[10px] font-black uppercase tracking-widest text-right">Amount</TableHead>
+                <TableHead className="w-[80px] text-right"></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredIncomes.map((income) => (
+                <TableRow key={income.id} className="hover:bg-muted/10 transition-colors border-b border-border/40">
+                  <TableCell className="px-6">
+                    <div className="flex flex-col text-foreground">
+                      <span className="font-bold text-sm">{income.source}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-muted-foreground italic truncate max-w-[200px]">{income.notes || 'No description'}</span>
+                        {income.createdByName && (
+                          <span className="text-[9px] text-primary font-black uppercase italic tracking-tighter">By {income.createdByName}</span>
+                        )}
+                      </div>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-100 text-[9px] uppercase font-bold py-0">
+                      {income.category}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-center font-mono text-xs text-muted-foreground">
+                    {income.date}
+                  </TableCell>
+                  <TableCell className="text-right font-black text-emerald-600">
+                    ₹{income.amount.toLocaleString()}
+                  </TableCell>
+                  <TableCell className="text-right p-4">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger render={
+                        <Button variant="ghost" size="icon" className="w-8 h-8 text-muted-foreground hover:text-rose-500">
+                          <MoreVertical className="w-4 h-4" />
+                        </Button>
+                      } />
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onSelect={() => deleteIncome(income.id)} className="text-rose-500">
+                          <Trash2 className="w-4 h-4 mr-2" /> Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </TableCell>
+                </TableRow>
+              ))}
+              {!loading && filteredIncomes.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={5} className="h-64 text-center">
+                    <div className="flex flex-col items-center justify-center space-y-3 opacity-30">
+                      <DollarSign className="w-12 h-12" />
+                      <p className="font-black uppercase tracking-[0.2em] text-[10px]">No income records</p>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
+
+        {/* Mobile View Cards */}
+        <div className="md:hidden divide-y divide-border/20">
+          {filteredIncomes.map((income) => (
+            <div key={income.id} className="p-4 space-y-3">
+              <div className="flex items-start justify-between">
+                <div>
+                  <h4 className="text-sm font-bold text-foreground leading-tight mb-1">{income.source}</h4>
+                  <div className="flex gap-2">
+                    <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-100 text-[8px] uppercase font-bold py-0">
+                      {income.category}
+                    </Badge>
+                    <span className="text-[10px] text-muted-foreground mt-0.5">{income.date}</span>
+                    {income.createdByName && (
+                      <span className="text-[9px] text-primary font-black uppercase italic mt-0.5 ml-1">By {income.createdByName}</span>
+                    )}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm font-black text-emerald-600">₹{income.amount.toLocaleString()}</p>
+                  <Button onClick={() => deleteIncome(income.id)} variant="ghost" size="icon" className="h-8 w-8 text-rose-500 mt-1">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+              </div>
+              {income.notes && (
+                <p className="text-[10px] text-muted-foreground italic leading-relaxed">
+                  {income.notes}
+                </p>
+              )}
+            </div>
+          ))}
+          {!loading && filteredIncomes.length === 0 && (
+            <div className="py-20 text-center text-muted-foreground italic text-xs uppercase tracking-widest font-black">
+              Empty records
+            </div>
+          )}
+        </div>
+      </div>
+
+      <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+        <DialogContent className="sm:max-w-[450px]">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-black">Record Income</DialogTitle>
+            <DialogDescription>Manually add an inflow transaction to the records.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <label className="text-xs font-black uppercase text-muted-foreground">Source</label>
+              <Input 
+                placeholder="Product Sale, Donor Name..." 
+                value={source} 
+                onChange={(e) => setSource(e.target.value)}
+                className="font-bold text-foreground"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <label className="text-xs font-black uppercase text-muted-foreground">Amount (₹)</label>
+                <Input 
+                  type="number" 
+                  placeholder="0.00" 
+                  value={amount} 
+                  onChange={(e) => setAmount(e.target.value)}
+                  className="font-black text-emerald-600"
+                />
+              </div>
+              <div className="grid gap-2">
+                <label className="text-xs font-black uppercase text-muted-foreground">Category</label>
+                <Select value={category} onValueChange={setCategory}>
+                  <SelectTrigger className="font-bold text-foreground">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {INCOME_CATEGORIES.map(cat => (
+                      <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid gap-2">
+              <label className="text-xs font-black uppercase text-muted-foreground">Date</label>
+              <Input 
+                type="date" 
+                value={date} 
+                onChange={(e) => setDate(e.target.value)}
+                className="font-mono text-foreground"
+              />
+            </div>
+            <div className="grid gap-2">
+              <label className="text-xs font-black uppercase text-muted-foreground">Internal Notes</label>
+              <Input 
+                placeholder="Reference number or memo..." 
+                value={notes} 
+                onChange={(e) => setNotes(e.target.value)}
+                className="text-foreground"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsAddOpen(false)} className="text-foreground">Cancel</Button>
+            <Button 
+               onClick={handleAddIncome} 
+               disabled={!source || !amount || isSubmitting}
+               className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-8 shadow-lg shadow-emerald-200"
+            >
+              {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Save Entry
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}

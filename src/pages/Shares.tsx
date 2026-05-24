@@ -36,18 +36,28 @@ import {
 } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { collection, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, increment } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
-import { Member, ShareTransaction } from '@/types';
+import { db, auth } from '@/lib/firebase';
+import { Member, ShareTransaction, AppSettings } from '@/types';
 import { handleFirestoreError, OperationType } from '@/lib/firestore-errors';
 import { toast } from 'sonner';
+import { 
+  Table, 
+  TableBody, 
+  TableCell, 
+  TableHead, 
+  TableHeader, 
+  TableRow 
+} from '@/components/ui/table';
 
 const COLORS = ['#4f46e5', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 
 export function SharesPage() {
   const [members, setMembers] = React.useState<Member[]>([]);
   const [transactions, setTransactions] = React.useState<ShareTransaction[]>([]);
+  const [settings, setSettings] = React.useState<AppSettings | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [isUpdateOpen, setIsUpdateOpen] = React.useState(false);
+  const [isPriceOpen, setIsPriceOpen] = React.useState(false);
 
   // Form State
   const [selectedMemberId, setSelectedMemberId] = React.useState('');
@@ -55,6 +65,7 @@ export function SharesPage() {
   const [changeAmount, setChangeAmount] = React.useState('');
   const [reason, setReason] = React.useState('');
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [newSharePrice, setNewSharePrice] = React.useState('');
 
   React.useEffect(() => {
     const unsubMem = onSnapshot(collection(db, 'members'), (snapshot) => {
@@ -64,12 +75,21 @@ export function SharesPage() {
     const unsubTrans = onSnapshot(collection(db, 'share_transactions'), (snapshot) => {
       setTransactions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ShareTransaction))
         .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)));
-      setLoading(false);
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'share_transactions'));
+
+    const unsubSettings = onSnapshot(doc(db, 'settings', 'global'), (snapshot) => {
+      if (snapshot.exists()) {
+        setSettings({ id: snapshot.id, ...snapshot.data() } as AppSettings);
+      } else {
+        setSettings({ id: 'global', sharePrice: 10, updatedAt: Date.now() });
+      }
+      setLoading(false);
+    }, (error) => handleFirestoreError(error, OperationType.GET, 'settings/global'));
 
     return () => {
       unsubMem();
       unsubTrans();
+      unsubSettings();
     };
   }, []);
 
@@ -83,6 +103,27 @@ export function SharesPage() {
   }, [members]);
 
   const totalShares = members.reduce((sum, m) => sum + (m.shares || 0), 0);
+  const sharePrice = settings?.sharePrice || 10;
+  const marketCap = totalShares * sharePrice;
+
+  const handleUpdatePrice = async () => {
+    const price = parseFloat(newSharePrice);
+    if (isNaN(price) || price <= 0) return;
+    setIsSubmitting(true);
+    try {
+      await updateDoc(doc(db, 'settings', 'global'), {
+        sharePrice: price,
+        updatedAt: Date.now(),
+        updatedByName: auth.currentUser?.displayName || auth.currentUser?.email?.split('@')[0] || 'Unknown'
+      });
+      toast.success('Share price updated');
+      setIsPriceOpen(false);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'settings/global');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   const handleUpdateShares = async () => {
     if (!selectedMemberId || !changeAmount || parseFloat(changeAmount) <= 0) return;
@@ -115,7 +156,8 @@ export function SharesPage() {
         newUnits: newTotal,
         change: finalChange,
         reason: reason || (changeType === 'add' ? 'Share Issuance' : 'Share Buyback'),
-        createdAt: serverTimestamp()
+        createdAt: serverTimestamp(),
+        createdByName: auth.currentUser?.displayName || auth.currentUser?.email?.split('@')[0] || 'Unknown'
       });
 
       toast.success(`Successfully updated shares for ${member.name}`);
@@ -139,15 +181,20 @@ export function SharesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight text-foreground">Shares Management</h2>
-          <p className="text-muted-foreground text-sm">Equity distribution and capital history.</p>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h2 className="text-2xl font-bold tracking-tight text-foreground">Shares Management</h2>
+            <p className="text-muted-foreground text-sm">Equity distribution and capital history.</p>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setIsPriceOpen(true)} className="gap-2 text-foreground">
+              <CircleDollarSign className="w-4 h-4" /> Set Share Price
+            </Button>
+            <Button onClick={() => setIsUpdateOpen(true)} className="gap-2 shadow-lg shadow-primary/20">
+              <ArrowRightLeft className="w-4 h-4" /> Issue/Transfer Shares
+            </Button>
+          </div>
         </div>
-        <Button onClick={() => setIsUpdateOpen(true)} className="gap-2 shadow-lg shadow-primary/20">
-          <ArrowRightLeft className="w-4 h-4" /> Issue/Transfer Shares
-        </Button>
-      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card className="border-none shadow-md bg-card/50">
@@ -174,18 +221,87 @@ export function SharesPage() {
           </CardContent>
         </Card>
 
-        <Card className="border-none shadow-md bg-card/50">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-widest">Market Cap (Est)</CardTitle>
+          <Card className="border-none shadow-md bg-card/50 text-foreground">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-widest">Share Price</CardTitle>
+            </CardHeader>
+            <CardContent>
+               <div className="flex items-center gap-3">
+                  <CircleDollarSign className="w-8 h-8 text-primary" />
+                  <p className="text-3xl font-black">₹{sharePrice.toLocaleString()} <span className="text-xs font-normal text-muted-foreground">/ Unit</span></p>
+               </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-none shadow-md bg-card/50 text-foreground text-center sm:text-left">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-widest">Market Cap (Est)</CardTitle>
+            </CardHeader>
+            <CardContent>
+               <div className="flex items-center gap-3">
+                  <TrendingUp className="w-8 h-8 text-amber-500" />
+                  <p className="text-3xl font-black">₹{marketCap.toLocaleString()}</p>
+               </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <Card className="border-none shadow-md bg-card/50 text-foreground">
+          <CardHeader>
+            <CardTitle className="text-lg">Shareholder Registry</CardTitle>
+            <CardDescription>Current share price: ₹{sharePrice} / share</CardDescription>
           </CardHeader>
-          <CardContent>
-             <div className="flex items-center gap-3">
-                <TrendingUp className="w-8 h-8 text-amber-500" />
-                <p className="text-3xl font-black text-foreground">₹{(totalShares * 100).toLocaleString()}</p>
-             </div>
+          <CardContent className="p-0 sm:p-6">
+            {/* Desktop View Table */}
+            <div className="hidden md:block">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Member</TableHead>
+                    <TableHead className="text-right">Shares</TableHead>
+                    <TableHead className="text-right">Ownership</TableHead>
+                    <TableHead className="text-right">Value (₹)</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {members.filter(m => m.shares > 0).map(m => (
+                    <TableRow key={m.id}>
+                      <TableCell className="font-bold">{m.name}</TableCell>
+                      <TableCell className="text-right font-mono">{m.shares}</TableCell>
+                      <TableCell className="text-right">
+                        {((m.shares / totalShares) * 100).toFixed(2)}%
+                      </TableCell>
+                      <TableCell className="text-right font-black text-emerald-600">
+                        ₹{(m.shares * sharePrice).toLocaleString()}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+
+            {/* Mobile View Cards */}
+            <div className="md:hidden divide-y divide-border/20">
+              {members.filter(m => m.shares > 0).map(m => (
+                <div key={m.id} className="p-4 flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-bold text-foreground">{m.name}</p>
+                    <p className="text-[10px] text-muted-foreground uppercase">{m.shares} Units • {((m.shares / totalShares) * 100).toFixed(1)}%</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-black text-emerald-600">₹{(m.shares * sharePrice).toLocaleString()}</p>
+                    <p className="text-[9px] text-muted-foreground uppercase font-black tracking-widest">Equity Value</p>
+                  </div>
+                </div>
+              ))}
+              {members.filter(m => m.shares > 0).length === 0 && (
+                <div className="py-12 text-center text-muted-foreground italic text-xs">
+                  No active shareholders.
+                </div>
+              )}
+            </div>
           </CardContent>
         </Card>
-      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
          <Card className="border-none shadow-md bg-card/50">
@@ -249,9 +365,14 @@ export function SharesPage() {
                         <div key={t.id} className="p-3 rounded-lg border border-border/40 bg-background/50 space-y-2">
                            <div className="flex items-center justify-between">
                               <p className="text-xs font-bold text-foreground">{(t as any).memberName}</p>
-                              <p className="text-[10px] text-muted-foreground">
-                                 {t.createdAt?.toDate ? t.createdAt.toDate().toLocaleDateString() : 'Just now'}
-                              </p>
+                              <div className="flex flex-col items-end">
+                                 <p className="text-[10px] text-muted-foreground">
+                                    {t.createdAt?.toDate ? t.createdAt.toDate().toLocaleDateString() : 'Just now'}
+                                 </p>
+                                 {(t as any).createdByName && (
+                                    <p className="text-[8px] text-primary font-black uppercase italic leading-none mt-0.5">By {(t as any).createdByName}</p>
+                                 )}
+                              </div>
                            </div>
                            <div className="flex items-center justify-between">
                               <div className="flex items-center gap-2">
@@ -336,6 +457,32 @@ export function SharesPage() {
                <Button disabled={isSubmitting} onClick={handleUpdateShares}>
                   {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <CheckCircle2 className="w-4 h-4 mr-2" />}
                   Record Change
+               </Button>
+            </DialogFooter>
+         </DialogContent>
+      </Dialog>
+
+      <Dialog open={isPriceOpen} onOpenChange={setIsPriceOpen}>
+         <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+               <DialogTitle>Update Share Price</DialogTitle>
+               <DialogDescription>Set the global market price for a single unit of share.</DialogDescription>
+            </DialogHeader>
+            <div className="py-4">
+               <label className="text-sm font-medium text-foreground">Price per Share (₹)</label>
+               <Input 
+                  type="number" 
+                  placeholder="100" 
+                  value={newSharePrice} 
+                  onChange={(e) => setNewSharePrice(e.target.value)}
+                  className="mt-2 text-foreground font-black text-lg"
+               />
+            </div>
+            <DialogFooter>
+               <Button variant="outline" onClick={() => setIsPriceOpen(false)} className="text-foreground">Cancel</Button>
+               <Button disabled={isSubmitting} onClick={handleUpdatePrice}>
+                  {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <CheckCircle2 className="w-4 h-4 mr-2" />}
+                  Update Market Price
                </Button>
             </DialogFooter>
          </DialogContent>

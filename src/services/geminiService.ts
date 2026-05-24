@@ -5,7 +5,7 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
 export async function getSpendingInsights(expenses: any[]) {
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-1.5-flash",
+      model: "gemini-3-flash-preview",
       contents: `
         Analyze the following cooperative organization expenses and provide 3-4 professional, concise insights about spending patterns, potential savings, or financial health.
         

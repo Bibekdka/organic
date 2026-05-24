@@ -4,6 +4,7 @@ export type User = {
   displayName: string | null;
   photoURL: string | null;
   createdAt: number;
+  avatarUrl?: string;
 };
 
 export type Society = {
@@ -24,10 +25,11 @@ export type Member = {
   userId?: string;
   name: string;
   email?: string;
-  role: 'admin' | 'member';
+  role: 'admin' | 'member' | 'president' | 'secretary' | 'promoter';
   status: 'active' | 'inactive';
   joinedAt: number;
   shares: number; // Added this
+  avatarUrl?: string; // Permanant avatar
 };
 
 export type SplitType = 'equal' | 'percentage' | 'custom' | 'shares';
@@ -50,6 +52,8 @@ export type Expense = {
   splits: Split[];
   createdAt: any;
   createdBy?: string;
+  createdByName?: string;
+  updatedByName?: string;
   isRecurring?: boolean;
   recurringFrequency?: Frequency;
 };
@@ -90,6 +94,19 @@ export type ShareTransaction = {
 export type TaskStatus = 'todo' | 'in_progress' | 'done';
 export type TaskPriority = 'low' | 'medium' | 'high';
 
+export type Income = {
+  id: string;
+  source: string;
+  amount: number;
+  category: string;
+  date: string;
+  notes?: string;
+  createdAt: any;
+  createdBy: string;
+  createdByName?: string;
+  updatedByName?: string;
+};
+
 export type Task = {
   id: string;
   societyId: string;
@@ -100,4 +117,23 @@ export type Task = {
   assignedTo?: string; // memberId
   dueDate?: number;
   createdAt: number;
+  createdByName?: string;
+  updatedByName?: string;
+};
+
+export type OnboardingRecord = {
+  id: string;
+  name: string;
+  email?: string;
+  suggestedRole: Member['role'];
+  notes?: string;
+  createdAt: any;
+  createdByName?: string;
+  updatedByName?: string;
+};
+
+export type AppSettings = {
+  id: string;
+  sharePrice: number;
+  updatedAt: number;
 };

@@ -5,7 +5,8 @@ import {
   PieChart, 
   AlertCircle, 
   Loader2,
-  Plus
+  Plus,
+  CheckCircle2
 } from 'lucide-react';
 import { 
   Dialog, 
@@ -21,9 +22,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import { cn } from '@/lib/utils';
+import { cn, getUserAttribution } from '@/lib/utils';
 import { SplitType, Member, Frequency } from '@/types';
-import { collection, addDoc, serverTimestamp, query, onSnapshot } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, query, onSnapshot, doc, updateDoc } from 'firebase/firestore';
 import { db, auth } from '@/lib/firebase';
 import { handleFirestoreError, OperationType } from '@/lib/firestore-errors';
 import { toast } from 'sonner';
@@ -31,6 +32,7 @@ import { toast } from 'sonner';
 interface AddExpenseDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void; // eslint-disable-line no-unused-vars
+  initialData?: any;
 }
 
 const DEFAULT_CATEGORIES = [
@@ -62,7 +64,7 @@ const DEFAULT_CATEGORIES = [
  *    - Equity Shares: Allocates based on member's ownership units.
  *    - Manual: Direct amount entry per member.
  */
-export function AddExpenseDialog({ open, onOpenChange }: AddExpenseDialogProps) {
+export function AddExpenseDialog({ open, onOpenChange, initialData }: AddExpenseDialogProps) {
   const [members, setMembers] = React.useState<Member[]>([]);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
@@ -79,6 +81,40 @@ export function AddExpenseDialog({ open, onOpenChange }: AddExpenseDialogProps) 
   const [frequency, setFrequency] = React.useState<Frequency>('monthly');
   const [selectedMemberIds, setSelectedMemberIds] = React.useState<string[]>([]);
   const [manualSplits, setManualSplits] = React.useState<Record<string, number>>({});
+
+  /**
+   * Effect: Initialize form with initialData if editing.
+   */
+  React.useEffect(() => {
+    if (initialData && open) {
+      setAmount(initialData.amount || 0);
+      setDescription(initialData.description || '');
+      if (DEFAULT_CATEGORIES.includes(initialData.category)) {
+        setCategory(initialData.category);
+        setIsCustomCategory(false);
+      } else {
+        setIsCustomCategory(true);
+        setCustomCategory(initialData.category || '');
+      }
+      setPaidBy(initialData.paidBy || '');
+      setDate(initialData.date || new Date().toISOString().split('T')[0]);
+      setSplitType(initialData.splitType || 'equal');
+      setIsRecurring(!!initialData.isRecurring);
+      
+      const involvedIds = initialData.splits?.map((s: any) => s.memberId) || [];
+      setSelectedMemberIds(involvedIds);
+      
+      if (initialData.splitType === 'percentage' || initialData.splitType === 'custom') {
+        const manual: Record<string, number> = {};
+        initialData.splits?.forEach((s: any) => {
+          manual[s.memberId] = initialData.splitType === 'percentage' ? s.percentage : s.amount;
+        });
+        setManualSplits(manual);
+      }
+    } else if (open && !initialData) {
+      resetForm();
+    }
+  }, [initialData, open]);
 
   /**
    * Effect: Fetch members from Firestore when the dialog opens.
@@ -156,6 +192,7 @@ export function AddExpenseDialog({ open, onOpenChange }: AddExpenseDialogProps) 
       // Use custom category if the user opted for it
       const finalCategory = isCustomCategory ? customCategory : category;
       
+      const attr = getUserAttribution();
       const expenseData = {
         description,
         amount,
@@ -174,36 +211,51 @@ export function AddExpenseDialog({ open, onOpenChange }: AddExpenseDialogProps) 
           }
           return split;
         }),
-        createdAt: serverTimestamp(),
-        createdBy: userId,
-        isRecurring
+        isRecurring,
+        updatedAt: serverTimestamp(),
+        updatedByName: attr.userName,
+        updatedByDevice: attr.device
       };
 
-      // 1. Log the one-time expense instance
-      await addDoc(collection(db, 'expenses'), expenseData);
-
-      // 2. If it's recurring, create a template for future automated logs
-      if (isRecurring) {
-        let daysToAdd = 30;
-        if (frequency === 'daily') daysToAdd = 1;
-        else if (frequency === 'weekly') daysToAdd = 7;
-        else if (frequency === 'monthly') daysToAdd = 30;
-        else if (frequency === 'yearly') daysToAdd = 365;
-
-        await addDoc(collection(db, 'recurring_templates'), {
+      if (initialData?.id) {
+        // Update existing record (Expense or Template)
+        const targetColl = initialData._collection || 'expenses';
+        await updateDoc(doc(db, targetColl, initialData.id), expenseData);
+        toast.success(targetColl === 'expenses' ? "Expense updated" : "Template updated");
+      } else {
+        // Create new expense
+        const newExpense = {
           ...expenseData,
-          frequency,
-          nextExecutionDate: Date.now() + daysToAdd * 24 * 60 * 60 * 1000,
-          active: true
-        });
+          createdAt: serverTimestamp(),
+          createdBy: attr.userId,
+          createdByName: attr.userName,
+          createdByDevice: attr.device
+        };
+        await addDoc(collection(db, 'expenses'), newExpense);
+
+        // 2. If it's recurring, create a template for future automated logs
+        if (isRecurring) {
+          let daysToAdd = 30;
+          if (frequency === 'daily') daysToAdd = 1;
+          else if (frequency === 'weekly') daysToAdd = 7;
+          else if (frequency === 'monthly') daysToAdd = 30;
+          else if (frequency === 'yearly') daysToAdd = 365;
+
+          await addDoc(collection(db, 'recurring_templates'), {
+            ...newExpense,
+            frequency,
+            nextExecutionDate: Date.now() + daysToAdd * 24 * 60 * 60 * 1000,
+            active: true
+          });
+        }
+        toast.success("Expense logged successfully");
       }
 
-      toast.success("Expense logged successfully");
       onOpenChange(false);
       resetForm();
     } catch (error) {
-      toast.error("Failed to log expense. Please try again.");
-      handleFirestoreError(error, OperationType.CREATE, 'expenses');
+      toast.error(initialData ? "Failed to update expense" : "Failed to log expense");
+      handleFirestoreError(error, initialData ? OperationType.WRITE : OperationType.CREATE, 'expenses');
     } finally {
       setIsSubmitting(false);
     }
@@ -232,10 +284,10 @@ export function AddExpenseDialog({ open, onOpenChange }: AddExpenseDialogProps) 
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Receipt className="w-5 h-5 text-primary" />
-            Log New Expense
+            {initialData ? 'Edit Expense Record' : 'Log New Expense'}
           </DialogTitle>
           <DialogDescription>
-            Record a cooperative purchase and define allocation rules.
+            {initialData ? 'Update the details and allocation for this cooperative expense.' : 'Record a cooperative purchase and define allocation rules.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -450,8 +502,8 @@ export function AddExpenseDialog({ open, onOpenChange }: AddExpenseDialogProps) 
             onClick={handleSave} 
             className="shadow-lg shadow-primary/20 px-8"
           >
-            {isSubmitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
-            Confirm & Log
+            {isSubmitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : (initialData ? <CheckCircle2 className="w-4 h-4 mr-2" /> : <Plus className="w-4 h-4 mr-2" />)}
+            {initialData ? 'Update Record' : 'Confirm & Log'}
           </Button>
         </DialogFooter>
       </DialogContent>

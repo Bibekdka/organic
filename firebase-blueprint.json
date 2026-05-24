@@ -39,9 +39,30 @@
         "email": { "type": "string" },
         "role": { "type": "string", "enum": ["admin", "member"] },
         "status": { "type": "string", "enum": ["active", "inactive"] },
-        "joinedAt": { "type": "integer" }
+        "joinedAt": { "type": "integer" },
+        "avatarUrl": { "type": "string" },
+        "createdAt": { "type": "object" },
+        "createdByName": { "type": "string" },
+        "updatedByName": { "type": "string" }
       },
       "required": ["id", "societyId", "name", "email", "role", "status", "joinedAt"]
+    },
+    "Income": {
+      "title": "Income",
+      "description": "Logged income in a society",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "source": { "type": "string" },
+        "amount": { "type": "number" },
+        "category": { "type": "string" },
+        "date": { "type": "string" },
+        "notes": { "type": "string" },
+        "createdAt": { "type": "object" },
+        "createdBy": { "type": "string" },
+        "createdByName": { "type": "string" }
+      },
+      "required": ["source", "amount", "category", "date", "createdAt", "createdBy"]
     },
     "Task": {
       "title": "Task",
@@ -54,7 +75,9 @@
         "priority": { "type": "string", "enum": ["low", "medium", "high"] },
         "assignedTo": { "type": "string" },
         "createdAt": { "type": "integer" },
-        "societyId": { "type": "string" }
+        "societyId": { "type": "string" },
+        "createdByName": { "type": "string" },
+        "updatedByName": { "type": "string" }
       },
       "required": ["title", "status", "priority", "createdAt", "societyId"]
     },
@@ -104,8 +127,51 @@
           } 
         },
         "createdAt": { "type": "object" },
-        "createdBy": { "type": "string" }
+        "createdBy": { "type": "string" },
+        "createdByName": { "type": "string" },
+        "updatedByName": { "type": "string" }
       }
+    },
+    "AppSettings": {
+      "title": "App Settings",
+      "description": "Global application settings",
+      "type": "object",
+      "properties": {
+        "sharePrice": { "type": "number" },
+        "updatedAt": { "type": "integer" },
+        "updatedByName": { "type": "string" }
+      },
+      "required": ["sharePrice", "updatedAt"]
+    },
+    "ShareTransaction": {
+      "title": "Share Transaction",
+      "description": "Audit log for share changes",
+      "type": "object",
+      "properties": {
+        "memberId": { "type": "string" },
+        "memberName": { "type": "string" },
+        "previousUnits": { "type": "number" },
+        "newUnits": { "type": "number" },
+        "change": { "type": "number" },
+        "reason": { "type": "string" },
+        "createdAt": { "type": "object" },
+        "createdByName": { "type": "string" }
+      },
+      "required": ["memberId", "memberName", "change", "createdAt"]
+    },
+    "OnboardingRecord": {
+      "title": "Onboarding Record",
+      "description": "Potential members in the boarding queue",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "suggestedRole": { "type": "string" },
+        "notes": { "type": "string" },
+        "createdAt": { "type": "object" },
+        "createdByName": { "type": "string" }
+      },
+      "required": ["name", "createdAt"]
     }
   },
   "firestore": {
@@ -132,6 +198,22 @@
     "/recurring_templates/{templateId}": {
       "schema": "RecurringTemplate",
       "description": "Recurring expense templates"
+    },
+    "/incomes/{incomeId}": {
+      "schema": "Income",
+      "description": "Incomes collection"
+    },
+    "/settings/{settingId}": {
+      "schema": "AppSettings",
+      "description": "Global settings"
+    },
+    "/share_transactions/{transId}": {
+      "schema": "ShareTransaction",
+      "description": "Share transaction history"
+    },
+    "/onboarding/{recordId}": {
+      "schema": "OnboardingRecord",
+      "description": "Member onboarding queue"
     }
   }
 }

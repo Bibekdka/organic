@@ -7,6 +7,7 @@ import { ExpensesPage } from './pages/Expenses';
 import { SettlementsPage } from './pages/Settlements';
 import { SharesPage } from './pages/Shares';
 import { TasksPage } from './pages/Tasks';
+import { IncomesPage } from './pages/Incomes';
 import { ReportsPage } from './pages/Reports';
 import { SettingsPage } from './pages/Settings';
 import { Toaster } from './components/ui/sonner';
@@ -17,26 +18,11 @@ import {
   TrendingUp, 
   ShieldCheck,
   CreditCard,
-  Loader2,
-  Package
+  Loader2
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { auth } from './lib/firebase';
-
-// Placeholder pages for others
-const PlaceholderPage = ({ title }: { title: string }) => (
-  <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
-    <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center text-primary mb-2">
-      <Package className="w-10 h-10" />
-    </div>
-    <h2 className="text-3xl font-bold tracking-tight">{title}</h2>
-    <p className="text-muted-foreground max-w-sm">
-      This module is part of the premium setup and is currently being initialized for your organization.
-    </p>
-    <Button variant="outline">Learn More</Button>
-  </div>
-);
 
 function LoginPage() {
   const [isLoggingIn, setIsLoggingIn] = React.useState(false);
@@ -217,7 +203,7 @@ export default function App() {
       case 'expenses': return <ExpensesPage />;
       case 'settlements': return <SettlementsPage />;
       case 'shares': return <SharesPage />;
-      case 'income': return <PlaceholderPage title="Income Tracking" />;
+      case 'income': return <IncomesPage />;
       case 'tasks': return <TasksPage />;
       case 'reports': return <ReportsPage />;
       case 'settings': return <SettingsPage />;

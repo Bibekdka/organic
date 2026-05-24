@@ -165,7 +165,7 @@ export function SettlementsPage() {
                     <div className="flex items-center justify-between gap-4">
                        <div className="flex-1 space-y-1">
                           <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-tighter">From</p>
-                          <p className="text-sm font-bold text-foreground truncate">{members.find(m => m.id === s.from)?.name}</p>
+                          <p className="text-sm font-bold text-foreground truncate">{members.find(m => m.id === s.from)?.name || `User (${s.from.substring(0, 5)}...)`}</p>
                        </div>
                        
                        <div className="flex flex-col items-center gap-1 shrink-0">
@@ -179,7 +179,7 @@ export function SettlementsPage() {
 
                        <div className="flex-1 space-y-1 text-right">
                           <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-tighter">To</p>
-                          <p className="text-sm font-bold text-foreground truncate">{members.find(m => m.id === s.to)?.name}</p>
+                          <p className="text-sm font-bold text-foreground truncate">{members.find(m => m.id === s.to)?.name || `User (${s.to.substring(0, 5)}...)`}</p>
                        </div>
                     </div>
                     <Button variant="ghost" size="sm" className="w-full mt-4 h-8 text-[10px] uppercase font-bold tracking-widest hover:bg-emerald-500/10 hover:text-emerald-500 gap-2 text-foreground border border-transparent hover:border-emerald-500/20">

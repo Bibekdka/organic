@@ -13,7 +13,7 @@ import {
   Wallet
 } from 'lucide-react';
 import { jsPDF } from "jspdf";
-import "jspdf-autotable";
+import autoTable from "jspdf-autotable";
 import * as XLSX from 'xlsx';
 import { 
   DropdownMenu, 
@@ -99,11 +99,11 @@ export function Dashboard() {
       exp.description,
       `₹${exp.amount.toLocaleString()}`,
       exp.date,
-      stats.members.find(m => m.id === exp.paidBy)?.name || exp.paidBy,
+      stats.members.find(m => m.id === exp.paidBy)?.name || `User (${exp.paidBy.substring(0, 5)}...)`,
       exp.category
     ]);
 
-    (doc as any).autoTable({
+    autoTable(doc, {
       head: [['Description', 'Amount', 'Date', 'Paid By', 'Category']],
       body: tableData,
       startY: 35,
@@ -119,7 +119,7 @@ export function Dashboard() {
       Description: exp.description,
       Amount: exp.amount,
       Date: exp.date,
-      PaidBy: stats.members.find(m => m.id === exp.paidBy)?.name || exp.paidBy,
+      PaidBy: stats.members.find(m => m.id === exp.paidBy)?.name || `User (${exp.paidBy.substring(0, 5)}...)`,
       Category: exp.category,
       SplitType: exp.splitType
     })));
@@ -140,7 +140,7 @@ export function Dashboard() {
     return Object.entries(balances)
       .map(([id, balance]) => ({
         id,
-        name: stats.members.find(m => m.id === id)?.name || 'Unknown',
+        name: stats.members.find(m => m.id === id)?.name || `User (${id.substring(0, 5)}...)`,
         balance
       }))
       .sort((a, b) => b.balance - a.balance);
@@ -181,27 +181,27 @@ export function Dashboard() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight text-foreground">Welcome back</h2>
-          <p className="text-muted-foreground text-sm">Here's what's happening with Organic-O-Eats today.</p>
+          <h2 className="text-xl md:text-2xl font-bold tracking-tight text-foreground">Welcome back</h2>
+          <p className="text-muted-foreground text-xs md:text-sm">Here's what's happening with Organic-O-Eats today.</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="grid grid-cols-2 sm:flex items-center gap-2">
           <DropdownMenu>
             <DropdownMenuTrigger render={
-              <Button variant="outline" size="sm" className="gap-2 text-foreground">
-                <FileDown className="w-4 h-4" /> Download Report
+              <Button variant="outline" size="sm" className="w-full sm:w-auto gap-2 text-foreground text-xs h-9">
+                <FileDown className="w-4 h-4" /> <span className="hidden xs:inline">Report</span><span className="xs:hidden">Exp</span>
               </Button>
             } />
-            <DropdownMenuContent align="end" className="w-48">
-                 <DropdownMenuItem onClick={handleExportPDF} className="gap-2 text-foreground">
+            <DropdownMenuContent align="end" className="w-48 text-foreground">
+                 <DropdownMenuItem onSelect={handleExportPDF} className="gap-2">
                     <FileDown className="w-4 h-4 text-rose-500" /> Export PDF
                  </DropdownMenuItem>
-                 <DropdownMenuItem onClick={handleExportExcel} className="gap-2 text-foreground">
+                 <DropdownMenuItem onSelect={handleExportExcel} className="gap-2">
                     <FileSpreadsheet className="w-4 h-4 text-emerald-500" /> Export Excel
                  </DropdownMenuItem>
               </DropdownMenuContent>
            </DropdownMenu>
-           <Button onClick={() => setIsAddOpen(true)} size="sm" className="shadow-lg shadow-primary/20 gap-2">
-              <Plus className="w-4 h-4" /> Log Entry
+           <Button onClick={() => setIsAddOpen(true)} size="sm" className="h-9 shadow-lg shadow-primary/20 gap-2 text-xs">
+              <Plus className="w-4 h-4" /> <span className="hidden xs:inline">Log Entry</span><span className="xs:hidden">Log</span>
            </Button>
            <Button size="sm" variant="ghost" className="hidden sm:flex text-muted-foreground">Refresh Insights</Button>
         </div>
@@ -209,6 +209,7 @@ export function Dashboard() {
 
       <AddExpenseDialog open={isAddOpen} onOpenChange={setIsAddOpen} />
 
+      {/* TOP STAT CARDS: High-level overview of members, spending, and health scores */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard 
           title="Active Members" 
@@ -237,6 +238,7 @@ export function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+         {/* MEMBER BALANCES: Shows who owes what in real-time */}
          <Card className="lg:col-span-1 border-none shadow-md bg-card/50">
             <CardHeader>
                <CardTitle className="text-lg flex items-center gap-2 text-foreground">
@@ -250,6 +252,7 @@ export function Dashboard() {
                   {memberBalances.map((mb) => (
                      <div key={mb.id} className="flex items-center justify-between p-3 rounded-xl bg-secondary/5 border border-transparent hover:border-primary/10 transition-all">
                         <div className="flex items-center gap-3">
+                           {/* MEMBER AVATAR/ICON */}
                            <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-bold text-primary">
                               {mb.name[0]}
                            </div>
@@ -257,8 +260,8 @@ export function Dashboard() {
                         </div>
                         <div className="text-right">
                            <p className={cn(
-                              "text-sm font-black",
-                              mb.balance >= 0 ? "text-emerald-500" : "text-rose-500"
+                               "text-sm font-black",
+                               mb.balance >= 0 ? "text-emerald-500" : "text-rose-500"
                            )}>
                               {mb.balance >= 0 ? '+' : ''}₹{Math.abs(mb.balance).toLocaleString()}
                            </p>
@@ -273,6 +276,7 @@ export function Dashboard() {
          </Card>
 
          <div className="lg:col-span-2 space-y-6">
+            {/* AI INSIGHTS SECTION: Powered by Gemini API to analyze spending patterns */}
             <Card className="border-none bg-gradient-to-r from-primary/10 via-primary/5 to-transparent shadow-md overflow-hidden relative group">
                <CardHeader className="pb-2">
                   <div className="flex items-center gap-2">
@@ -303,6 +307,7 @@ export function Dashboard() {
                </CardContent>
             </Card>
 
+            {/* CATEGORY DONUT CHART: Visual representation of where money is going */}
             <Card className="border-none shadow-md bg-card/50">
                <CardHeader>
                   <CardTitle className="text-lg text-foreground">Spending Mix</CardTitle>

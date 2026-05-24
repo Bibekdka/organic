@@ -32,7 +32,9 @@ service cloud.firestore {
              data.date is string &&
              data.splits is list &&
              data.splitType in ['equal', 'percentage', 'custom', 'shares'] &&
-             data.createdBy == request.auth.uid;
+             data.createdBy == request.auth.uid &&
+             (!data.keys().hasAny(['createdByName']) || data.createdByName is string) &&
+             (!data.keys().hasAny(['updatedByName']) || data.updatedByName is string);
     }
 
     function isValidTask(data) {
@@ -41,7 +43,20 @@ service cloud.firestore {
              data.status in ['todo', 'in_progress', 'done'] &&
              data.priority in ['low', 'medium', 'high'] &&
              data.createdAt is number &&
-             data.societyId is string;
+             data.societyId is string &&
+             (!data.keys().hasAny(['assignedTo']) || data.assignedTo is string || data.assignedTo == null) &&
+             (!data.keys().hasAny(['createdByName']) || data.createdByName is string) &&
+             (!data.keys().hasAny(['updatedByName']) || data.updatedByName is string);
+    }
+
+    function isValidIncome(data) {
+      return data.keys().hasAll(['source', 'amount', 'category', 'date', 'createdAt', 'createdBy']) &&
+             data.source is string && data.source.size() <= 200 &&
+             data.amount is number && data.amount >= 0 &&
+             data.category is string && data.category.size() <= 100 &&
+             data.date is string &&
+             data.createdBy == request.auth.uid &&
+             (!data.keys().hasAny(['createdByName']) || data.createdByName is string);
     }
 
     function isValidRecurringTemplate(data) {
@@ -53,10 +68,45 @@ service cloud.firestore {
              data.active is bool &&
              data.createdBy == request.auth.uid;
     }
+    
+    function isValidAppSettings(data) {
+      return data.keys().hasAll(['sharePrice', 'updatedAt']) &&
+             data.sharePrice is number && data.sharePrice >= 0 &&
+             data.updatedAt is number &&
+             (!data.keys().hasAny(['updatedByName']) || data.updatedByName is string);
+    }
+    
+    function isValidShareTransaction(data) {
+      return data.keys().hasAll(['memberId', 'memberName', 'change', 'createdAt']) &&
+             data.memberId is string &&
+             data.memberName is string &&
+             data.change is number &&
+             (!data.keys().hasAny(['createdByName']) || data.createdByName is string);
+    }
+
+    function isValidOnboarding(data) {
+      return data.keys().hasAll(['name', 'createdAt']) &&
+             data.name is string && data.name.size() <= 200 &&
+             (!data.keys().hasAny(['email']) || data.email is string) &&
+             (!data.keys().hasAny(['suggestedRole']) || data.suggestedRole is string) &&
+             (!data.keys().hasAny(['notes']) || data.notes is string) &&
+             (!data.keys().hasAny(['createdByName']) || data.createdByName is string);
+    }
 
     // -------------------------------------------------------------------------
     // MATCH BLOCKS
     // -------------------------------------------------------------------------
+
+    function isValidMember(data) {
+      return data.keys().hasAll(['name', 'role', 'status', 'joinedAt', 'shares', 'avatarUrl']) &&
+             data.name is string && data.name.size() <= 200 &&
+             data.role in ['admin', 'member', 'president', 'secretary', 'promoter'] &&
+             data.status in ['active', 'inactive'] &&
+             data.shares is number &&
+             (!data.keys().hasAny(['email']) || data.email is string) &&
+             (!data.keys().hasAny(['createdByName']) || data.createdByName is string) &&
+             (!data.keys().hasAny(['updatedByName']) || data.updatedByName is string);
+    }
 
     match /users/{userId} {
       allow get: if isSignedIn() && request.auth.uid == userId;
@@ -69,20 +119,29 @@ service cloud.firestore {
       // Allow any signed in user to read for now (community app)
       allow read: if isSignedIn();
       allow create: if isSignedIn() && isValidExpense(incoming());
-      allow update: if isSignedIn() && (existing().createdBy == request.auth.uid || isAdmin());
+      allow update: if isSignedIn() && isValidExpense(incoming()) && (existing().createdBy == request.auth.uid || isAdmin()) &&
+                    incoming().diff(existing()).affectedKeys().hasOnly(['description', 'amount', 'paidBy', 'category', 'date', 'splits', 'isRecurring', 'updatedByName']);
       allow delete: if isSignedIn() && (existing().createdBy == request.auth.uid || isAdmin());
     }
 
     match /members/{memberId} {
       allow read: if isSignedIn();
-      allow write: if isSignedIn(); // Society members can manage membership for now
+      allow create: if isSignedIn() && isValidMember(incoming());
+      allow update: if isSignedIn() && (incoming().diff(existing()).affectedKeys().hasOnly(['role', 'name', 'email', 'status', 'shares', 'avatarUrl', 'updatedByName']));
+      allow delete: if isSignedIn();
+    }
+
+    match /onboarding/{recordId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidOnboarding(incoming());
+      allow delete: if isSignedIn();
     }
 
     match /tasks/{taskId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn() && isValidTask(incoming());
-      allow update: if isSignedIn() && (
-        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'priority', 'assignedTo', 'title', 'description'])
+      allow update: if isSignedIn() && isValidTask(incoming()) && (
+        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'priority', 'assignedTo', 'title', 'description', 'updatedByName'])
       );
       allow delete: if isSignedIn();
     }
@@ -94,6 +153,29 @@ service cloud.firestore {
         incoming().diff(existing()).affectedKeys().hasOnly(['active', 'nextExecutionDate', 'description', 'amount'])
       );
       allow delete: if isSignedIn();
+    }
+
+    match /incomes/{incomeId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidIncome(incoming());
+      allow update: if isSignedIn() && isValidIncome(incoming()) && (existing().createdBy == request.auth.uid || isAdmin()) &&
+                    incoming().diff(existing()).affectedKeys().hasOnly(['source', 'amount', 'category', 'date', 'notes', 'updatedByName']);
+      allow delete: if isSignedIn() && (existing().createdBy == request.auth.uid || isAdmin());
+    }
+
+    match /settings/{settingId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn(); // For now anyone can update for demo, ideally isAdmin()
+    }
+
+    match /share_transactions/{transId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidShareTransaction(incoming());
+      allow update, delete: if isAdmin();
+    }
+
+    match /admins/{adminId} {
+      allow read: if isSignedIn();
     }
 
     match /test/connection {
