@@ -127,6 +127,7 @@ export type OnboardingRecord = {
   name: string;
   email?: string;
   suggestedRole: Member['role'];
+  gender?: 'male' | 'female' | 'other';
   notes?: string;
   createdAt: any;
   createdByName?: string;

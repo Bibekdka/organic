@@ -150,6 +150,7 @@ export function MembersPage() {
         name: newName,
         email: newEmail || '',
         suggestedRole: newRole,
+        gender: newGender,
         notes: newNotes || '',
         createdAt: serverTimestamp(),
         createdByName: attr.userName,
@@ -177,6 +178,7 @@ export function MembersPage() {
         shares: 0,
         role: record.suggestedRole || 'member',
         status: 'active',
+        gender: record.gender || 'male',
         avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${record.name}`,
         joinedAt: Date.now(),
         createdAt: serverTimestamp(),
@@ -763,7 +765,19 @@ export function MembersPage() {
                          </div>
                          <div className="min-w-0">
                             <h4 className="font-bold text-foreground truncate">{record.name}</h4>
-                            <p className="text-[10px] text-muted-foreground uppercase font-black tracking-widest leading-none">{record.suggestedRole}</p>
+                            <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                              <span className="text-[10px] text-muted-foreground uppercase font-black tracking-widest leading-none">{record.suggestedRole}</span>
+                              {record.gender && (
+                                <Badge variant="outline" className={cn(
+                                  "text-[8px] h-3.5 px-1 font-bold border-none capitalize leading-none",
+                                  record.gender === 'male' ? "bg-indigo-500/10 text-indigo-500" :
+                                  record.gender === 'female' ? "bg-rose-500/10 text-rose-500" :
+                                  "bg-amber-500/10 text-amber-500"
+                                )}>
+                                  {record.gender}
+                                </Badge>
+                              )}
+                            </div>
                          </div>
                       </div>
                       <Button onClick={() => deleteOnboarding(record.id)} variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -1030,6 +1044,19 @@ export function MembersPage() {
             <div className="grid gap-2">
               <label className="text-sm font-medium">Email (Optional)</label>
               <Input placeholder="candidate@example.com" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} />
+            </div>
+            <div className="grid gap-2">
+              <label className="text-sm font-medium">Gender</label>
+              <Select value={newGender} onValueChange={(g: any) => setNewGender(g)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select Gender" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="male">Male</SelectItem>
+                  <SelectItem value="female">Female</SelectItem>
+                  <SelectItem value="other">Other</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="grid gap-2">
               <label className="text-sm font-medium">Potential Role</label>

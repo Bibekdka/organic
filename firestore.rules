@@ -85,6 +85,7 @@ service cloud.firestore {
       return data.keys().hasAll(['name', 'createdAt']) &&
              data.name is string && data.name.size() <= 200 &&
              (!data.keys().hasAny(['email']) || data.email is string) &&
+             (!data.keys().hasAny(['gender']) || data.gender in ['male', 'female', 'other']) &&
              (!data.keys().hasAny(['suggestedRole']) || data.suggestedRole is string) &&
              (!data.keys().hasAny(['notes']) || data.notes is string) &&
              (!data.keys().hasAny(['createdByName']) || data.createdByName is string);
