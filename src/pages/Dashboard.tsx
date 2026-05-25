@@ -10,7 +10,20 @@ import {
   Sparkles,
   FileDown,
   FileSpreadsheet,
-  Wallet
+  Wallet,
+  ChevronDown,
+  ChevronUp,
+  Target,
+  Edit2,
+  Calendar,
+  ChevronLeft,
+  ChevronRight,
+  Check,
+  AlertTriangle,
+  CalendarDays,
+  Activity,
+  PiggyBank,
+  Trash2
 } from 'lucide-react';
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -24,6 +37,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { 
   BarChart, 
   Bar, 
@@ -36,7 +50,7 @@ import {
   Pie,
   PieChart as RePieChart
 } from 'recharts';
-import { collection, query, onSnapshot, orderBy } from 'firebase/firestore';
+import { collection, query, onSnapshot, orderBy, doc, setDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { handleFirestoreError, OperationType } from '@/lib/firestore-errors';
 import { cn, downloadPDFFile, calculateSettlements } from '@/lib/utils';
@@ -44,6 +58,7 @@ import { getSpendingInsights } from '@/services/geminiService';
 import { AddExpenseDialog } from '@/components/AddExpenseDialog';
 import { Plus } from 'lucide-react';
 import { useAuthStore } from '@/store/useAuthStore';
+import { motion, AnimatePresence } from 'motion/react';
 
 export function Dashboard() {
   const { user } = useAuthStore();
@@ -52,12 +67,111 @@ export function Dashboard() {
     totalSpent: 0,
     recentExpenses: [] as any[],
     allExpenses: [] as any[],
-    members: [] as any[]
+    members: [] as any[],
+    allIncomes: [] as any[]
   });
   const [loading, setLoading] = React.useState(true);
   const [insights, setInsights] = React.useState<string[]>([]);
   const [loadingInsights, setLoadingInsights] = React.useState(false);
   const [isAddOpen, setIsAddOpen] = React.useState(false);
+
+  const [globalSettings, setGlobalSettings] = React.useState<any>(null);
+  const [isBalancesCollapsed, setIsBalancesCollapsed] = React.useState(false);
+  const [isEditingTarget, setIsEditingTarget] = React.useState(false);
+  const [targetInputVal, setTargetInputVal] = React.useState('');
+
+  // Calendar States
+  const [calendarDate, setCalendarDate] = React.useState(() => new Date());
+  const [selectedDayStr, setSelectedDayStr] = React.useState<string>(() => {
+    const today = new Date();
+    return today.toISOString().substring(0, 10); // "YYYY-MM-DD"
+  });
+  
+  // Planned items state (stored in localstorage for persistent milestones/planner events)
+  const [plannedEvents, setPlannedEvents] = React.useState<Record<string, Array<{id: string, text: string, type: 'expense' | 'income' | 'general', amount?: number}>>>(() => {
+    try {
+      const saved = localStorage.getItem('dashboard_planned_events');
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  const [newEventText, setNewEventText] = React.useState('');
+  const [newEventAmount, setNewEventAmount] = React.useState('');
+  const [newEventType, setNewEventType] = React.useState<'expense' | 'income' | 'general'>('general');
+
+  React.useEffect(() => {
+    localStorage.setItem('dashboard_planned_events', JSON.stringify(plannedEvents));
+  }, [plannedEvents]);
+
+  React.useEffect(() => {
+    const unsubSettings = onSnapshot(doc(db, 'settings', 'global'), (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        setGlobalSettings(data);
+        if (data.monthlySpentTarget) {
+          setTargetInputVal(data.monthlySpentTarget.toString());
+        }
+      } else {
+        setGlobalSettings({ sharePrice: 10, monthlySpentTarget: 50000 });
+        setTargetInputVal('50000');
+      }
+    });
+
+    return () => unsubSettings();
+  }, []);
+
+  const handleSaveTarget = async () => {
+    const parsed = parseFloat(targetInputVal);
+    if (!isNaN(parsed) && parsed >= 0) {
+      try {
+        await setDoc(doc(db, 'settings', 'global'), {
+          monthlySpentTarget: parsed,
+          updatedAt: Date.now(),
+          updatedByName: user?.displayName || user?.email || "User"
+        }, { merge: true });
+        setIsEditingTarget(false);
+      } catch (err) {
+        window.console.error("Error saving budget target:", err);
+      }
+    }
+  };
+
+  const handleAddPlannedEvent = () => {
+    if (!newEventText.trim()) return;
+    const item = {
+      id: Math.random().toString(36).substring(7),
+      text: newEventText.trim(),
+      type: newEventType,
+      amount: newEventAmount ? parseFloat(newEventAmount) : undefined
+    };
+    
+    setPlannedEvents(prev => {
+      const dayList = prev[selectedDayStr] || [];
+      return {
+        ...prev,
+        [selectedDayStr]: [...dayList, item]
+      };
+    });
+    setNewEventText('');
+    setNewEventAmount('');
+    setNewEventType('general');
+  };
+
+  const handleDeletePlannedEvent = (dayStr: string, itemId: string) => {
+    setPlannedEvents(prev => {
+      const dayList = prev[dayStr] || [];
+      const updated = dayList.filter(e => e.id !== itemId);
+      const copy = { ...prev };
+      if (updated.length === 0) {
+        delete copy[dayStr];
+      } else {
+        copy[dayStr] = updated;
+      }
+      return copy;
+    });
+  };
 
   const hasFetchedInsights = React.useRef(false);
 
@@ -101,9 +215,16 @@ export function Dashboard() {
       }
     }, (err) => handleFirestoreError(err, OperationType.LIST, 'expenses'));
 
+    // Listen to Incomes
+    const unsubIncomes = onSnapshot(collection(db, 'incomes'), (snapshot) => {
+      const incomes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setStats(prev => ({ ...prev, allIncomes: incomes }));
+    }, (err) => handleFirestoreError(err, OperationType.LIST, 'incomes'));
+
     return () => {
       unsubMembers();
       unsubExpenses();
+      unsubIncomes();
     };
   }, [generateAIReview]);
 
@@ -253,6 +374,90 @@ export function Dashboard() {
 
 
 
+  const targetBudget = globalSettings?.monthlySpentTarget ?? 50000;
+
+  const targetDaysInfo = React.useMemo(() => {
+    const today = new Date();
+    const year = calendarDate.getFullYear();
+    const month = calendarDate.getMonth();
+    const totalDays = new Date(year, month + 1, 0).getDate();
+    const isCurrentMonthView = today.getFullYear() === year && today.getMonth() === month;
+    const daysRemaining = isCurrentMonthView ? Math.max(1, totalDays - today.getDate()) : totalDays;
+    return {
+      totalDays,
+      daysRemaining,
+      isCurrentMonthView
+    };
+  }, [calendarDate]);
+
+  const currentMonthStr = React.useMemo(() => {
+    const yr = calendarDate.getFullYear();
+    const mo = String(calendarDate.getMonth() + 1).padStart(2, '0');
+    return `${yr}-${mo}`;
+  }, [calendarDate]);
+
+  const expensesThisCalendarMonth = React.useMemo(() => {
+    return stats.allExpenses.filter((exp: any) => exp.date && exp.date.startsWith(currentMonthStr));
+  }, [stats.allExpenses, currentMonthStr]);
+
+  const totalSpentThisCalendarMonth = React.useMemo(() => {
+    return expensesThisCalendarMonth.reduce((sum, exp: any) => sum + exp.amount, 0);
+  }, [expensesThisCalendarMonth]);
+
+  const calendarDays = React.useMemo(() => {
+    const year = calendarDate.getFullYear();
+    const month = calendarDate.getMonth();
+    const firstDayOfMonth = new Date(year, month, 1);
+    const startDayOfWeek = firstDayOfMonth.getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const days: Array<{ dateStr: string; dayNum: number; isCurrentMonth: boolean; key: string }> = [];
+    
+    const prevMonthDays = new Date(year, month, 0).getDate();
+    for (let i = startDayOfWeek - 1; i >= 0; i--) {
+      const dNum = prevMonthDays - i;
+      const prevM = month === 0 ? 11 : month - 1;
+      const prevY = month === 0 ? year - 1 : year;
+      const dStr = `${prevY}-${String(prevM + 1).padStart(2, '0')}-${String(dNum).padStart(2, '0')}`;
+      days.push({
+        dateStr: dStr,
+        dayNum: dNum,
+        isCurrentMonth: false,
+        key: `prev-${dStr}`
+      });
+    }
+    
+    for (let i = 1; i <= daysInMonth; i++) {
+      const dStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
+      days.push({
+        dateStr: dStr,
+        dayNum: i,
+        isCurrentMonth: true,
+        key: `curr-${dStr}`
+      });
+    }
+    
+    const remaining = 42 - days.length;
+    for (let i = 1; i <= remaining; i++) {
+      const nextM = month === 11 ? 0 : month + 1;
+      const nextY = month === 11 ? year + 1 : year;
+      const dStr = `${nextY}-${String(nextM + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
+      days.push({
+        dateStr: dStr,
+        dayNum: i,
+        isCurrentMonth: false,
+        key: `next-${dStr}`
+      });
+    }
+    return days;
+  }, [calendarDate]);
+
+  const getDailyDetails = React.useCallback((dateStr: string) => {
+    const expenses = stats.allExpenses.filter(e => e.date === dateStr);
+    const incomes = stats.allIncomes.filter(inc => inc.date === dateStr);
+    const planned = plannedEvents[dateStr] || [];
+    return { expenses, incomes, planned };
+  }, [stats.allExpenses, stats.allIncomes, plannedEvents]);
+
   const categoryData = React.useMemo(() => {
     const cats: Record<string, number> = {};
     stats.recentExpenses.forEach((exp: any) => {
@@ -344,42 +549,478 @@ export function Dashboard() {
         />
       </div>
 
+      {/* PERSISTENT MONTHLY BUDGET TARGET & CALENDAR DAY PLANNER */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-         {/* MEMBER BALANCES: Shows who owes what in real-time */}
-         <Card className="lg:col-span-1 border-none shadow-md bg-card/50">
-            <CardHeader>
-               <CardTitle className="text-lg flex items-center gap-2 text-foreground">
-                  <Wallet className="w-5 h-5 text-primary" />
-                  Real-Time Balances
-               </CardTitle>
-               <CardDescription>Net member standing across all expenses.</CardDescription>
-            </CardHeader>
-            <CardContent>
-               <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2">
-                  {memberBalances.map((mb) => (
-                     <div key={mb.id} className="flex items-center justify-between p-3 rounded-xl bg-secondary/5 border border-transparent hover:border-primary/10 transition-all">
-                        <div className="flex items-center gap-3">
-                           {/* MEMBER AVATAR/ICON */}
-                           <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-bold text-primary">
-                              {mb.name[0]}
+         
+         {/* MONTHLY TARGET COMPONENT */}
+         <Card className="lg:col-span-1 border-none shadow-md bg-card/50 flex flex-col justify-between">
+            <div>
+               <CardHeader className="pb-3 border-b border-white/5">
+                  <div className="flex items-center justify-between">
+                     <CardTitle className="text-lg flex items-center gap-2 text-foreground">
+                        <Target className="w-5 h-5 text-primary" />
+                        Monthly Target Tracker
+                     </CardTitle>
+                     {!isEditingTarget ? (
+                        <Button 
+                           variant="ghost" 
+                           size="icon" 
+                           onClick={() => setIsEditingTarget(true)} 
+                           className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                           title="Change Monthly Budget Limit"
+                        >
+                           <Edit2 className="w-4 h-4 text-primary" />
+                        </Button>
+                     ) : (
+                        <div className="flex items-center gap-1">
+                           <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              onClick={handleSaveTarget}
+                              className="h-8 w-8 text-emerald-500 hover:text-emerald-400"
+                              title="Save Limit"
+                           >
+                              <Check className="w-4 h-4" />
+                           </Button>
+                           <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              onClick={() => {
+                                 setTargetInputVal(targetBudget.toString());
+                                 setIsEditingTarget(false);
+                              }}
+                              className="h-8 w-8 text-rose-500 hover:text-rose-400"
+                              title="Cancel"
+                           >
+                              <ChevronDown className="w-4 h-4 rotate-90" />
+                           </Button>
+                        </div>
+                     )}
+                  </div>
+                  <CardDescription>
+                     Track your real-time expenses against custom targets.
+                  </CardDescription>
+               </CardHeader>
+               
+               <CardContent className="pt-6 space-y-6">
+                  {isEditingTarget ? (
+                     <div className="space-y-2 p-3 bg-white/5 rounded-xl border border-primary/10">
+                        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-widest block font-sans">Configure Monthly Budget Target</label>
+                        <div className="flex gap-2">
+                           <div className="relative flex-1">
+                              <span className="absolute left-3 top-2.5 text-xs text-muted-foreground font-black">₹</span>
+                              <Input 
+                                 type="number" 
+                                 value={targetInputVal} 
+                                 onChange={(e) => setTargetInputVal(e.target.value)} 
+                                 className="pl-6 text-foreground h-9 font-semibold font-mono"
+                                 placeholder="50000"
+                              />
                            </div>
-                           <span className="text-xs font-semibold text-foreground truncate max-w-[100px]">{mb.name}</span>
+                           <Button onClick={handleSaveTarget} className="h-9 px-3 gap-1 shadow-sm text-xs">
+                              <Check className="w-3.5 h-3.5" /> Set
+                           </Button>
+                        </div>
+                        <span className="text-[10px] text-muted-foreground font-normal leading-tight block">This target gets stored centrally in Firestore, ensuring updates sync across the organization immediately.</span>
+                     </div>
+                  ) : null}
+
+                  {/* PROGRESS BAR GAUGE */}
+                  <div className="space-y-4">
+                     <div className="flex items-end justify-between">
+                        <div>
+                           <p className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground">Threshold Usage</p>
+                           <p className="text-2xl font-black text-foreground">
+                              {targetBudget > 0 ? Math.min(100, Math.round((totalSpentThisCalendarMonth / targetBudget) * 100)) : 0}%
+                           </p>
                         </div>
                         <div className="text-right">
-                           <p className={cn(
-                               "text-sm font-black",
-                               mb.balance >= 0 ? "text-emerald-500" : "text-rose-500"
-                           )}>
-                              {mb.balance >= 0 ? '+' : ''}₹{Math.abs(mb.balance).toLocaleString()}
-                           </p>
-                           <p className="text-[9px] text-muted-foreground uppercase font-bold tracking-tighter">
-                              {mb.balance >= 0 ? 'To Receive' : 'To Pay'}
+                           <p className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground">Month Spent</p>
+                           <p className="text-sm font-semibold text-foreground">
+                              ₹{totalSpentThisCalendarMonth.toLocaleString()} <span className="text-xs text-muted-foreground">/ ₹{targetBudget.toLocaleString()}</span>
                            </p>
                         </div>
                      </div>
-                  ))}
+
+                     <div className="w-full bg-secondary/20 h-3 rounded-full overflow-hidden p-[2px]">
+                        <div 
+                           className={cn(
+                              "h-full rounded-full transition-all duration-500",
+                              targetBudget > 0 && (totalSpentThisCalendarMonth / targetBudget) > 1.0 
+                                 ? "bg-rose-500 group-hover:shadow-[0_0_8px_rgba(239,68,68,0.5)]" 
+                                 : targetBudget > 0 && (totalSpentThisCalendarMonth / targetBudget) > 0.75 
+                                    ? "bg-amber-400" 
+                                    : "bg-emerald-500"
+                           )}
+                           style={{ width: `${targetBudget > 0 ? Math.min(100, (totalSpentThisCalendarMonth / targetBudget) * 100) : 0}%` }}
+                        />
+                     </div>
+                  </div>
+
+                  {/* BUDGET MESSAGE PILL */}
+                  <div className={cn(
+                     "p-3 rounded-xl border flex gap-3 text-xs leading-relaxed",
+                     targetBudget > 0 && (totalSpentThisCalendarMonth / targetBudget) > 1.0 
+                        ? "bg-rose-500/10 border-rose-500/20 text-rose-400" 
+                        : targetBudget > 0 && (totalSpentThisCalendarMonth / targetBudget) > 0.75 
+                           ? "bg-amber-500/10 border-amber-500/20 text-amber-400" 
+                           : "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+                  )}>
+                     {targetBudget > 0 && (totalSpentThisCalendarMonth / targetBudget) > 1.0 ? (
+                        <>
+                           <AlertTriangle className="w-4 h-4 shrink-0 text-rose-500" />
+                           <p><strong>Over-budget!</strong> Spending exceeds your target threshold limit by ₹{(totalSpentThisCalendarMonth - targetBudget).toLocaleString()}. Consider halting non-essential expenses.</p>
+                        </>
+                     ) : targetBudget > 0 && (totalSpentThisCalendarMonth / targetBudget) > 0.75 ? (
+                        <>
+                           <AlertCircle className="w-4 h-4 shrink-0 text-amber-500" />
+                           <p><strong>Attention!</strong> You have utilized {(totalSpentThisCalendarMonth / targetBudget * 100).toFixed(0)}% of the pool allowance. Restrain bulk transactions.</p>
+                        </>
+                     ) : (
+                        <>
+                           <PiggyBank className="w-4 h-4 shrink-0 text-emerald-500" />
+                           <p><strong>Safe zone.</strong> Spending is within planned parameters. You have utilized only {(targetBudget > 0 ? (totalSpentThisCalendarMonth / targetBudget * 100).toFixed(0) : 0)}% of the target limit.</p>
+                        </>
+                     )}
+                  </div>
+
+                  {/* ADVANCED STATS METRICS ROW */}
+                  <div className="grid grid-cols-2 gap-4 pt-2">
+                     <div className="p-3 rounded-xl bg-white/5 border border-white/5">
+                        <p className="text-[10px] text-muted-foreground uppercase font-semibold">Remaining Fund</p>
+                        <p className="text-base font-bold text-foreground">
+                           ₹{Math.max(0, targetBudget - totalSpentThisCalendarMonth).toLocaleString()}
+                        </p>
+                     </div>
+                     <div className="p-3 rounded-xl bg-white/5 border border-white/5">
+                        <p className="text-[10px] text-muted-foreground uppercase font-semibold block leading-tight">Daily Safe Margin</p>
+                        <p className="text-base font-bold text-foreground">
+                           ₹{Math.max(0, Math.round((targetBudget - totalSpentThisCalendarMonth) / targetDaysInfo.daysRemaining)).toLocaleString()}<span className="text-[10px] text-muted-foreground">/day</span>
+                        </p>
+                        <p className="text-[9px] text-muted-foreground font-medium mt-1">Over {targetDaysInfo.daysRemaining} remaining days</p>
+                     </div>
+                  </div>
+               </CardContent>
+            </div>
+            
+            <div className="p-4 bg-primary/5 rounded-b-xl border-t border-white/5 flex items-center justify-between text-[11px] text-muted-foreground">
+               <span className="flex items-center gap-1">
+                  <Activity className="w-3.5 h-3.5 text-primary animate-pulse" /> Active Month:
+               </span>
+               <span className="font-bold text-foreground">
+                  {calendarDate.toLocaleString('default', { month: 'long', year: 'numeric' })}
+               </span>
+            </div>
+         </Card>
+
+         {/* INTERACTIVE CALENDAR SECTION */}
+         <Card className="lg:col-span-2 border-none shadow-md bg-card/50 flex flex-col select-none">
+            <CardHeader className="pb-3 border-b border-white/5 flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-2 sm:space-y-0">
+               <div>
+                  <CardTitle className="text-lg flex items-center gap-2 text-foreground">
+                     <Calendar className="w-5 h-5 text-primary" />
+                     Interactive Spending Calendar
+                  </CardTitle>
+                  <CardDescription>
+                     Browse months, inspect transaction events, or plan milestones.
+                  </CardDescription>
                </div>
+               
+               {/* Month Controls */}
+               <div className="flex items-center gap-2 bg-white/5 p-1 rounded-lg border border-white/5 self-start sm:self-auto">
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => {
+                     setCalendarDate(prev => {
+                        const next = new Date(prev);
+                        next.setMonth(prev.getMonth() - 1);
+                        return next;
+                     });
+                  }}>
+                     <ChevronLeft className="w-4 h-4 text-primary" />
+                  </Button>
+                  <span className="text-xs font-bold text-foreground min-w-[90px] text-center capitalize">
+                     {calendarDate.toLocaleString('default', { month: 'short', year: 'numeric' })}
+                  </span>
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => {
+                     setCalendarDate(prev => {
+                        const next = new Date(prev);
+                        next.setMonth(prev.getMonth() + 1);
+                        return next;
+                     });
+                  }}>
+                     <ChevronRight className="w-4 h-4 text-primary" />
+                  </Button>
+               </div>
+            </CardHeader>
+            
+            <CardContent className="p-6 grid grid-cols-1 md:grid-cols-5 gap-6">
+               
+               {/* 1. Month Days Grid */}
+               <div className="md:col-span-3 space-y-2">
+                  <div className="grid grid-cols-7 gap-1 text-center font-bold text-[10px] text-muted-foreground uppercase tracking-widest mb-1">
+                     <span>Su</span>
+                     <span>Mo</span>
+                     <span>Tu</span>
+                     <span>We</span>
+                     <span>Th</span>
+                     <span>Fr</span>
+                     <span>Sa</span>
+                  </div>
+                  
+                  <div className="grid grid-cols-7 gap-1">
+                     {calendarDays.map((day) => {
+                        const { expenses, incomes, planned } = getDailyDetails(day.dateStr);
+                        const dayExpSum = expenses.reduce((sum, e) => sum + e.amount, 0);
+                        const dayIncSum = incomes.reduce((sum, inc) => sum + inc.amount, 0);
+                        const isSelected = day.dateStr === selectedDayStr;
+                        const isToday = new Date().toISOString().substring(0, 10) === day.dateStr;
+
+                        return (
+                           <button
+                              key={day.key}
+                              onClick={() => setSelectedDayStr(day.dateStr)}
+                              className={cn(
+                                 "relative flex flex-col justify-between p-1.5 rounded-lg border text-left min-h-[52px] transition-all duration-150 overflow-hidden cursor-pointer",
+                                 !day.isCurrentMonth && "opacity-30 bg-card/20",
+                                 isSelected 
+                                    ? "border-primary bg-primary/10 ring-1 ring-primary/40 shadow-glow" 
+                                    : "border-white/5 bg-secondary/5 hover:bg-white/5",
+                                 isToday && !isSelected && "border-amber-500/50 bg-amber-500/5"
+                              )}
+                           >
+                              <span className={cn(
+                                 "text-[10px] font-bold block mb-1",
+                                 isToday ? "text-amber-500 font-black" : "text-foreground",
+                                 isSelected && "text-primary"
+                              )}>
+                                 {day.dayNum}
+                              </span>
+                              
+                              <div className="space-y-[2px] w-full mt-auto">
+                                 {dayExpSum > 0 && (
+                                    <span className="text-[8px] font-bold text-rose-500 block truncate leading-none">
+                                       -₹{dayExpSum >= 1000 ? `${(dayExpSum/1000).toFixed(0)}k` : dayExpSum}
+                                    </span>
+                                 )}
+                                 {dayIncSum > 0 && (
+                                    <span className="text-[8px] font-bold text-emerald-500 block truncate leading-none">
+                                       +₹{dayIncSum >= 1000 ? `${(dayIncSum/1000).toFixed(0)}k` : dayIncSum}
+                                    </span>
+                                 )}
+                                 {planned.length > 0 && (
+                                    <div className="flex gap-[3px] items-center pt-[1px] flex-wrap">
+                                       {planned.map((item, idx) => (
+                                          <div 
+                                             key={item.id || idx} 
+                                             className={cn(
+                                                "w-1 h-1 rounded-full",
+                                                item.type === 'expense' 
+                                                   ? "bg-rose-400" 
+                                                   : item.type === 'income' 
+                                                      ? "bg-emerald-400" 
+                                                      : "bg-purple-400"
+                                             )} 
+                                          />
+                                       ))}
+                                    </div>
+                                 )}
+                              </div>
+                           </button>
+                        );
+                     })}
+                  </div>
+               </div>
+
+               {/* 2. Planner details sidebar for selected dates */}
+               <div className="md:col-span-2 border-t md:border-t-0 md:border-l border-white/5 md:pl-6 pt-4 md:pt-0 flex flex-col justify-between h-full space-y-4">
+                  <div>
+                     <div className="flex items-center justify-between mb-3">
+                        <h4 className="text-xs font-black uppercase text-primary tracking-widest flex items-center gap-1.5">
+                           <CalendarDays className="w-4 h-4 text-primary" /> Planner Hub
+                        </h4>
+                        <Badge variant="outline" className="text-[9px] py-0 border-white/10 font-bold bg-white/5 text-foreground/80">
+                           {(() => {
+                              const [y, m, d] = selectedDayStr.split('-');
+                              if (!y || !m || !d) return selectedDayStr;
+                              const dt = new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
+                              return dt.toLocaleDateString('default', { month: 'short', day: 'numeric', weekday: 'short' });
+                           })()}
+                        </Badge>
+                     </div>
+
+                     {/* Flow Activity lists for day */}
+                     <div className="space-y-3 max-h-[160px] overflow-y-auto pr-1">
+                        {(() => {
+                           const { expenses, incomes, planned } = getDailyDetails(selectedDayStr);
+                           const hasLogged = expenses.length > 0 || incomes.length > 0 || planned.length > 0;
+                           
+                           if (!hasLogged) {
+                              return (
+                                 <p className="text-[11px] text-muted-foreground italic py-4 text-center">
+                                    No logged operations or pending plans on this calendar day.
+                                 </p>
+                              );
+                           }
+
+                           return (
+                              <div className="space-y-2">
+                                 {/* Planned Milestones */}
+                                 {planned.map((item) => (
+                                    <div key={item.id} className="flex items-center justify-between p-2 rounded-lg bg-purple-500/5 border border-purple-500/10 text-[11px] text-foreground">
+                                       <div className="flex items-center gap-2 truncate">
+                                          <div className={cn(
+                                             "w-[6px] h-[6px] rounded-full shrink-0",
+                                             item.type === 'expense' 
+                                                ? "bg-rose-500" 
+                                                : item.type === 'income' 
+                                                   ? "bg-emerald-500" 
+                                                   : "bg-purple-500"
+                                          )} />
+                                          <span className="truncate font-medium text-foreground">{item.text}</span>
+                                       </div>
+                                       <div className="flex items-center gap-2 shrink-0">
+                                          {item.amount && <span className="font-semibold text-foreground">₹{item.amount.toLocaleString()}</span>}
+                                          <Button 
+                                             variant="ghost" 
+                                             size="icon" 
+                                             onClick={() => handleDeletePlannedEvent(selectedDayStr, item.id)} 
+                                             className="h-5 w-5 hover:text-rose-500"
+                                             title="Delete Plan"
+                                          >
+                                             <Trash2 className="w-3 h-3 text-rose-400" />
+                                          </Button>
+                                       </div>
+                                    </div>
+                                 ))}
+
+                                 {/* Actual Expenses */}
+                                 {expenses.map((e: any) => (
+                                    <div key={e.id} className="flex items-center justify-between p-2 rounded-lg bg-rose-500/5 border border-rose-500/10 text-[11px] text-foreground">
+                                       <span className="truncate text-muted-foreground">Exp: <strong className="text-foreground">{e.description}</strong></span>
+                                       <span className="font-bold text-rose-400">₹{e.amount.toLocaleString()}</span>
+                                    </div>
+                                 ))}
+
+                                 {/* Actual Incomes */}
+                                 {incomes.map((inc: any) => (
+                                    <div key={inc.id} className="flex items-center justify-between p-2 rounded-lg bg-emerald-500/5 border border-emerald-500/10 text-[11px] text-foreground">
+                                       <span className="truncate text-muted-foreground">Inc: <strong className="text-foreground">{inc.source}</strong></span>
+                                       <span className="font-bold text-emerald-400">₹{inc.amount.toLocaleString()}</span>
+                                    </div>
+                                 ))}
+                              </div>
+                           );
+                        })()}
+                     </div>
+                  </div>
+
+                  {/* Planner quick creator Form */}
+                  <div className="border-t border-white/5 pt-3 space-y-2">
+                     <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest block">Add Planned Milestone</span>
+                     <div className="grid grid-cols-2 gap-2">
+                        <Input 
+                           type="text" 
+                           placeholder="e.g. Bulk ingredients..." 
+                           value={newEventText} 
+                           onChange={(e) => setNewEventText(e.target.value)} 
+                           className="text-[11px] h-8 text-foreground"
+                        />
+                        <Input 
+                           type="number" 
+                           placeholder="optional ₹ amount" 
+                           value={newEventAmount} 
+                           onChange={(e) => setNewEventAmount(e.target.value)} 
+                           className="text-[11px] h-8 text-foreground font-mono"
+                        />
+                     </div>
+                     <div className="flex gap-2">
+                        <select 
+                           value={newEventType} 
+                           onChange={(e: any) => setNewEventType(e.target.value)}
+                           className="text-[11px] bg-neutral-900 border border-white/5 rounded-md px-2 flex-grow text-foreground h-8 focus:outline-none"
+                        >
+                           <option value="general">Milestone/Note</option>
+                           <option value="expense">Planned Expense</option>
+                           <option value="income">Planned Income</option>
+                        </select>
+                        <Button onClick={handleAddPlannedEvent} className="h-8 shrink-0 text-xs px-3">
+                           <Plus className="w-3 h-3 mr-1" /> Add
+                        </Button>
+                     </div>
+                  </div>
+
+               </div>
+               
             </CardContent>
+         </Card>
+
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+         {/* MEMBER BALANCES: Shows who owes what in real-time */}
+         <Card className="lg:col-span-1 border-none shadow-md bg-card/50">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0">
+               <div>
+                  <CardTitle className="text-lg flex items-center gap-2 text-foreground">
+                     <Wallet className="w-5 h-5 text-primary" />
+                     Real-Time Balances
+                  </CardTitle>
+                  <CardDescription>Net member standing across all expenses.</CardDescription>
+               </div>
+               <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  onClick={() => setIsBalancesCollapsed(!isBalancesCollapsed)} 
+                  className="text-muted-foreground hover:text-foreground h-8 w-8"
+                  title={isBalancesCollapsed ? "Expand" : "Collapse"}
+               >
+                  {isBalancesCollapsed ? (
+                     <ChevronDown className="w-4 h-4 text-primary" />
+                  ) : (
+                     <ChevronUp className="w-4 h-4 text-primary" />
+                  )}
+               </Button>
+            </CardHeader>
+            <AnimatePresence initial={false}>
+               {!isBalancesCollapsed && (
+                  <motion.div
+                     initial={{ height: 0, opacity: 0 }}
+                     animate={{ height: "auto", opacity: 1 }}
+                     exit={{ height: 0, opacity: 0 }}
+                     transition={{ duration: 0.2 }}
+                     className="overflow-hidden"
+                  >
+                     <CardContent>
+                        <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2">
+                           {memberBalances.map((mb) => (
+                              <div key={mb.id} className="flex items-center justify-between p-3 rounded-xl bg-secondary/5 border border-transparent hover:border-primary/10 transition-all">
+                                 <div className="flex items-center gap-3">
+                                    {/* MEMBER AVATAR/ICON */}
+                                    <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-bold text-primary">
+                                       {mb.name[0]}
+                                    </div>
+                                    <span className="text-xs font-semibold text-foreground truncate max-w-[100px]">{mb.name}</span>
+                                 </div>
+                                 <div className="text-right">
+                                    <p className={cn(
+                                        "text-sm font-black",
+                                        mb.balance >= 0 ? "text-emerald-500" : "text-rose-500"
+                                    )}>
+                                       {mb.balance >= 0 ? '+' : ''}₹{Math.abs(mb.balance).toLocaleString()}
+                                    </p>
+                                    <p className="text-[9px] text-muted-foreground uppercase font-bold tracking-tighter">
+                                       {mb.balance >= 0 ? 'To Receive' : 'To Pay'}
+                                    </p>
+                                 </div>
+                              </div>
+                           ))}
+                           {memberBalances.length === 0 && (
+                              <p className="text-xs text-muted-foreground italic text-center py-4">No balances calculated.</p>
+                           )}
+                        </div>
+                     </CardContent>
+                  </motion.div>
+               )}
+            </AnimatePresence>
          </Card>
 
          <div className="lg:col-span-2 space-y-6">

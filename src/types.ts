@@ -145,5 +145,6 @@ export type OnboardingRecord = {
 export type AppSettings = {
   id: string;
   sharePrice: number;
+  monthlySpentTarget?: number;
   updatedAt: number;
 };
