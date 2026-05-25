@@ -92,7 +92,13 @@ service cloud.firestore {
              (!data.keys().hasAny(['phone']) || data.phone is string) &&
              (!data.keys().hasAny(['suggestedRole']) || data.suggestedRole is string) &&
              (!data.keys().hasAny(['notes']) || data.notes is string) &&
-             (!data.keys().hasAny(['createdByName']) || data.createdByName is string);
+             (!data.keys().hasAny(['shares']) || data.shares is number) &&
+             (!data.keys().hasAny(['status']) || data.status is string) &&
+             (!data.keys().hasAny(['createdByDevice']) || data.createdByDevice is string) &&
+             (!data.keys().hasAny(['createdByName']) || data.createdByName is string) &&
+             (!data.keys().hasAny(['updatedByName']) || data.updatedByName is string) &&
+             (!data.keys().hasAny(['updatedByDevice']) || data.updatedByDevice is string) &&
+             (!data.keys().hasAny(['updatedAt']) || data.updatedAt is timestamp);
     }
 
     // -------------------------------------------------------------------------
@@ -142,6 +148,11 @@ service cloud.firestore {
     match /onboarding/{recordId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn() && isValidOnboarding(incoming());
+      allow update: if isSignedIn() && isValidOnboarding(incoming()) && (
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'name', 'email', 'suggestedRole', 'gender', 'dob', 'aadharNo', 'panNo', 'phone', 'notes', 'shares', 'updatedByName', 'updatedByDevice', 'updatedAt'
+        ])
+      );
       allow delete: if isSignedIn();
     }
 

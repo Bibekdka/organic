@@ -179,8 +179,14 @@
         "panNo": { "type": "string" },
         "phone": { "type": "string" },
         "notes": { "type": "string" },
+        "shares": { "type": "number" },
+        "status": { "type": "string" },
         "createdAt": { "type": "object" },
-        "createdByName": { "type": "string" }
+        "createdByName": { "type": "string" },
+        "createdByDevice": { "type": "string" },
+        "updatedByName": { "type": "string" },
+        "updatedByDevice": { "type": "string" },
+        "updatedAt": { "type": "object" }
       },
       "required": ["name", "createdAt"]
     }

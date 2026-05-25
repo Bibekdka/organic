@@ -137,6 +137,7 @@ export type OnboardingRecord = {
   panNo?: string;
   phone?: string;
   notes?: string;
+  shares?: number;
   createdAt: any;
   createdByName?: string;
   updatedByName?: string;

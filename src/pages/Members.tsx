@@ -201,6 +201,7 @@ export function MembersPage() {
         panNo: newPanNo || '',
         phone: newPhone || '',
         notes: newNotes || '',
+        shares: parseFloat(newShares) || 0,
         createdAt: serverTimestamp(),
         createdByName: attr.userName,
         createdByDevice: attr.device,
@@ -210,7 +211,7 @@ export function MembersPage() {
       setIsOnboardingAddOpen(false);
       resetAddForm();
     } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, 'onboarding');
+       handleFirestoreError(error, OperationType.CREATE, 'onboarding');
     } finally {
       setIsSubmitting(false);
     }
@@ -224,7 +225,7 @@ export function MembersPage() {
       await addDoc(collection(db, 'members'), {
         name: record.name,
         email: record.email || '',
-        shares: 0,
+        shares: record.shares || 0,
         role: record.suggestedRole || 'member',
         status: 'active',
         gender: record.gender || 'male',
@@ -311,6 +312,9 @@ export function MembersPage() {
     setNewPanNo(record.panNo || '');
     setNewPhone(record.phone || '');
     setNewNotes(record.notes || '');
+    const currentShares = record.shares ?? 10;
+    setNewShares(currentShares.toString());
+    setNewSharesRupees((currentShares * 10).toString());
     setIsEditOnboardingOpen(true);
   };
 
@@ -329,6 +333,7 @@ export function MembersPage() {
         panNo: newPanNo || '',
         phone: newPhone || '',
         notes: newNotes || '',
+        shares: parseFloat(newShares) || 0,
         updatedByName: attr.userName,
         updatedByDevice: attr.device,
         updatedAt: serverTimestamp()
@@ -1050,11 +1055,22 @@ export function MembersPage() {
                     </div>
 
                     <div className="space-y-4">
-                       <div className="p-3 rounded-lg bg-card/60 border border-border/40">
-                          <p className="text-[10px] text-muted-foreground uppercase font-bold mb-1 italic">Internal Notes</p>
-                          <p className="text-xs text-foreground leading-relaxed italic">
-                             {record.notes || "No candidate notes provided."}
-                          </p>
+                       <div className="grid grid-cols-2 gap-3">
+                          <div className="p-3 rounded-lg bg-card/60 border border-border/40 flex flex-col justify-between">
+                             <p className="text-[10px] text-muted-foreground uppercase font-semibold mb-1 italic">Internal Notes</p>
+                             <p className="text-xs text-foreground leading-normal italic line-clamp-2" title={record.notes}>
+                                {record.notes || "No notes."}
+                             </p>
+                          </div>
+                          <div className="p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/10 flex flex-col justify-center">
+                             <p className="text-[9px] text-emerald-500 uppercase font-bold tracking-wider mb-0.5">Planned Equity</p>
+                             <p className="text-sm font-black text-foreground">
+                                {record.shares ?? 0} Shares
+                             </p>
+                             <p className="text-[10px] text-muted-foreground font-mono">
+                                ₹{(record.shares ?? 0) * 10} (@ ₹10/sh)
+                             </p>
+                          </div>
                        </div>
                        
                        <div className="flex items-center justify-between gap-2 pt-2 border-t border-border/20">
@@ -1430,6 +1446,35 @@ export function MembersPage() {
               <label className="text-sm font-medium text-foreground">Onboarding Notes</label>
               <Input placeholder="e.g. Needs specialized training..." value={newNotes} onChange={(e) => setNewNotes(e.target.value)} className="text-foreground" />
             </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <label className="text-sm font-medium text-foreground flex items-center justify-between">
+                  <span>Planned Shares (Units)</span>
+                  <span className="text-[10px] text-muted-foreground font-semibold">1 share = ₹10</span>
+                </label>
+                <Input 
+                  type="number" 
+                  placeholder="10" 
+                  value={newShares} 
+                  onChange={(e) => handleSharesChange(e.target.value)} 
+                  className="text-foreground" 
+                />
+              </div>
+              <div className="grid gap-2">
+                <label className="text-sm font-medium text-foreground">Amount (Rupees / ₹)</label>
+                <div className="relative">
+                  <span className="absolute left-3 top-2.5 text-xs text-muted-foreground select-none font-medium">₹</span>
+                  <Input 
+                    type="number" 
+                    placeholder="100" 
+                    value={newSharesRupees} 
+                    onChange={(e) => handleRupeesChange(e.target.value)} 
+                    className="text-foreground pl-7" 
+                  />
+                </div>
+              </div>
+            </div>
           </div>
 
           <DialogFooter className="p-6 pt-3 bg-muted/10 border-t">
@@ -1542,6 +1587,35 @@ export function MembersPage() {
             <div className="grid gap-2">
               <label className="text-sm font-medium text-foreground">Onboarding Notes</label>
               <Input placeholder="e.g. Needs specialized training..." value={newNotes} onChange={(e) => setNewNotes(e.target.value)} className="text-foreground" />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <label className="text-sm font-medium text-foreground flex items-center justify-between">
+                  <span>Planned Shares (Units)</span>
+                  <span className="text-[10px] text-muted-foreground font-semibold">1 share = ₹10</span>
+                </label>
+                <Input 
+                  type="number" 
+                  placeholder="10" 
+                  value={newShares} 
+                  onChange={(e) => handleSharesChange(e.target.value)} 
+                  className="text-foreground" 
+                />
+              </div>
+              <div className="grid gap-2">
+                <label className="text-sm font-medium text-foreground">Amount (Rupees / ₹)</label>
+                <div className="relative">
+                  <span className="absolute left-3 top-2.5 text-xs text-muted-foreground select-none font-medium">₹</span>
+                  <Input 
+                    type="number" 
+                    placeholder="100" 
+                    value={newSharesRupees} 
+                    onChange={(e) => handleRupeesChange(e.target.value)} 
+                    className="text-foreground pl-7" 
+                  />
+                </div>
+              </div>
             </div>
           </div>
 
