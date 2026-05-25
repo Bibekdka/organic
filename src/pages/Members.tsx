@@ -365,6 +365,48 @@ export function MembersPage() {
     };
   }, [members]);
 
+  const combinedGenderStats = React.useMemo(() => {
+    const total = members.length + onboarding.length;
+    if (total === 0) {
+      return { maleCount: 0, femaleCount: 0, otherCount: 0, malePercentage: 0, femalePercentage: 0, otherPercentage: 0 };
+    }
+    
+    let maleCount = 0;
+    let femaleCount = 0;
+    let otherCount = 0;
+    
+    members.forEach(m => {
+      const g = m.gender?.toLowerCase() || 'unspecified';
+      if (g === 'male') {
+        maleCount++;
+      } else if (g === 'female') {
+        femaleCount++;
+      } else {
+        otherCount++;
+      }
+    });
+
+    onboarding.forEach(o => {
+      const g = o.gender?.toLowerCase() || 'unspecified';
+      if (g === 'male') {
+        maleCount++;
+      } else if (g === 'female') {
+        femaleCount++;
+      } else {
+        otherCount++;
+      }
+    });
+
+    return {
+      maleCount,
+      femaleCount,
+      otherCount,
+      malePercentage: parseFloat(((maleCount / total) * 100).toFixed(1)),
+      femalePercentage: parseFloat(((femaleCount / total) * 100).toFixed(1)),
+      otherPercentage: parseFloat(((otherCount / total) * 100).toFixed(1))
+    };
+  }, [members, onboarding]);
+
   const filteredMembers = members.filter(m => 
     m.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (m.email && m.email.toLowerCase().includes(searchTerm.toLowerCase()))
@@ -792,7 +834,102 @@ export function MembersPage() {
           </div>
         </TabsContent>
 
-        <TabsContent value="onboarding" className="m-0 animate-in slide-in-from-right-1 duration-500">
+        <TabsContent value="onboarding" className="space-y-6 m-0 animate-in slide-in-from-right-1 duration-500">
+          {/* Combined Demographics Summary Bar */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <Card className="bg-card border-none shadow-sm overflow-hidden">
+              <CardContent className="p-6 flex flex-col justify-between h-full space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-1">Combined Registry</p>
+                    <h3 className="text-2xl font-black text-foreground">{members.length + onboarding.length}</h3>
+                    <p className="text-xs text-muted-foreground mt-1 text-[11px]">Active + Onboarding Queue Pool</p>
+                  </div>
+                  <div className="p-3 bg-primary/5 rounded-full text-primary shrink-0">
+                    <Users className="w-6 h-6" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border/20 text-center">
+                  <div className="p-2 rounded bg-muted/20">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Active Team</p>
+                    <p className="text-sm font-black text-primary">{members.length}</p>
+                  </div>
+                  <div className="p-2 rounded bg-muted/20">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">In Queue</p>
+                    <p className="text-sm font-black text-primary">{onboarding.length}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-card border-none shadow-sm overflow-hidden md:col-span-2">
+              <CardContent className="p-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+                  <div>
+                    <h4 className="text-sm font-bold text-foreground">Combined Demographics</h4>
+                    <p className="text-xs text-muted-foreground">Proportion of men and women (Active + Queue)</p>
+                  </div>
+                  <div className="flex items-center gap-4 text-xs font-semibold text-foreground text-muted-foreground">
+                    <div className="flex items-center gap-1.5 text-foreground">
+                      <span className="w-2.5 h-2.5 rounded-full bg-indigo-500" />
+                      <span>Men ({combinedGenderStats.malePercentage}%)</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-foreground">
+                      <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
+                      <span>Women ({combinedGenderStats.femalePercentage}%)</span>
+                    </div>
+                    {combinedGenderStats.otherPercentage > 0 && (
+                      <div className="flex items-center gap-1.5 text-foreground">
+                        <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+                        <span>Other ({combinedGenderStats.otherPercentage}%)</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Progress Visual Bar */}
+                <div className="h-3 w-full bg-muted rounded-full overflow-hidden flex">
+                  {combinedGenderStats.malePercentage > 0 && (
+                    <div 
+                      className="bg-indigo-500 h-full transition-all duration-500 animate-pulse-slow" 
+                      style={{ width: `${combinedGenderStats.malePercentage}%` }}
+                      title={`Men: ${combinedGenderStats.maleCount} (${combinedGenderStats.malePercentage}%)`}
+                    />
+                  )}
+                  {combinedGenderStats.femalePercentage > 0 && (
+                    <div 
+                      className="bg-rose-500 h-full transition-all duration-500" 
+                      style={{ width: `${combinedGenderStats.femalePercentage}%` }}
+                      title={`Women: ${combinedGenderStats.femaleCount} (${combinedGenderStats.femalePercentage}%)`}
+                    />
+                  )}
+                  {combinedGenderStats.otherPercentage > 0 && (
+                    <div 
+                      className="bg-amber-500 h-full transition-all duration-500" 
+                      style={{ width: `${combinedGenderStats.otherPercentage}%` }}
+                      title={`Other: ${combinedGenderStats.otherCount} (${combinedGenderStats.otherPercentage}%)`}
+                    />
+                  )}
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 mt-4 text-center">
+                  <div className="p-2 rounded bg-muted/20">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Men</p>
+                    <p className="text-sm font-black text-indigo-500">{combinedGenderStats.maleCount} <span className="text-[10px] font-normal text-muted-foreground">({combinedGenderStats.malePercentage}%)</span></p>
+                  </div>
+                  <div className="p-2 rounded bg-muted/20">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Women</p>
+                    <p className="text-sm font-black text-rose-500">{combinedGenderStats.femaleCount} <span className="text-[10px] font-normal text-muted-foreground">({combinedGenderStats.femalePercentage}%)</span></p>
+                  </div>
+                  <div className="p-2 rounded bg-muted/20">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Other / Unspecified</p>
+                    <p className="text-sm font-black text-amber-500">{combinedGenderStats.otherCount} <span className="text-[10px] font-normal text-muted-foreground">({combinedGenderStats.otherPercentage}%)</span></p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
           <div className="bg-card rounded-xl border border-dashed border-primary/20 p-8 min-h-[400px]">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {onboarding.length > 0 ? onboarding.map((record) => (
