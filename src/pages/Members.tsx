@@ -12,7 +12,8 @@ import {
   Check,
   Pencil,
   Tag,
-  Receipt
+  Receipt,
+  Save
 } from 'lucide-react';
 import { 
   Table, 
@@ -102,7 +103,9 @@ export function MembersPage() {
   const [isAddOpen, setIsAddOpen] = React.useState(false);
   const [isOnboardingAddOpen, setIsOnboardingAddOpen] = React.useState(false);
   const [isEditOpen, setIsEditOpen] = React.useState(false);
+  const [isEditOnboardingOpen, setIsEditOnboardingOpen] = React.useState(false);
   const [editingMember, setEditingMember] = React.useState<Member | null>(null);
+  const [editingOnboarding, setEditingOnboarding] = React.useState<OnboardingRecord | null>(null);
   const [newName, setNewName] = React.useState('');
   const [newEmail, setNewEmail] = React.useState('');
   const [newShares, setNewShares] = React.useState('10');
@@ -295,6 +298,50 @@ export function MembersPage() {
     setNewPanNo(member.panNo || '');
     setNewPhone(member.phone || '');
     setIsEditOpen(true);
+  };
+
+  const openEditOnboardingDialog = (record: OnboardingRecord) => {
+    setEditingOnboarding(record);
+    setNewName(record.name);
+    setNewEmail(record.email || '');
+    setNewRole(record.suggestedRole);
+    setNewGender(record.gender || 'male');
+    setNewDob(record.dob || '');
+    setNewAadharNo(record.aadharNo || '');
+    setNewPanNo(record.panNo || '');
+    setNewPhone(record.phone || '');
+    setNewNotes(record.notes || '');
+    setIsEditOnboardingOpen(true);
+  };
+
+  const handleEditOnboarding = async () => {
+    if (!editingOnboarding || !newName) return;
+    setIsSubmitting(true);
+    const attr = getUserAttribution();
+    try {
+      await updateDoc(doc(db, 'onboarding', editingOnboarding.id), {
+        name: newName,
+        email: newEmail || '',
+        suggestedRole: newRole,
+        gender: newGender,
+        dob: newDob || '',
+        aadharNo: newAadharNo || '',
+        panNo: newPanNo || '',
+        phone: newPhone || '',
+        notes: newNotes || '',
+        updatedByName: attr.userName,
+        updatedByDevice: attr.device,
+        updatedAt: serverTimestamp()
+      });
+      toast.success('Onboarding candidate updated successfully');
+      setIsEditOnboardingOpen(false);
+      setEditingOnboarding(null);
+      resetAddForm();
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `onboarding/${editingOnboarding.id}`);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const resetAddForm = () => {
@@ -980,9 +1027,26 @@ export function MembersPage() {
                             </div>
                          </div>
                       </div>
-                      <Button onClick={() => deleteOnboarding(record.id)} variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity">
-                         <Trash2 className="w-4 h-4" />
-                      </Button>
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                         <Button 
+                            onClick={() => openEditOnboardingDialog(record)} 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-8 w-8 text-muted-foreground hover:text-primary transition-colors"
+                            title="Edit Candidate"
+                         >
+                            <Pencil className="w-4 h-4" />
+                         </Button>
+                         <Button 
+                            onClick={() => deleteOnboarding(record.id)} 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-8 w-8 text-muted-foreground hover:text-rose-500 transition-colors"
+                            title="Delete Candidate"
+                         >
+                            <Trash2 className="w-4 h-4" />
+                         </Button>
+                      </div>
                     </div>
 
                     <div className="space-y-4">
@@ -1373,6 +1437,119 @@ export function MembersPage() {
             <Button disabled={isSubmitting} onClick={handleAddOnboarding}>
                {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <UserPlus className="w-4 h-4 mr-2" />}
                Queue Candidate
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Onboarding Edit Dialog */}
+      <Dialog open={isEditOnboardingOpen} onOpenChange={(open) => { if (!open) { setIsEditOnboardingOpen(false); resetAddForm(); } }}>
+        <DialogContent className="sm:max-w-[450px] max-h-[90vh] flex flex-col p-0 overflow-hidden text-foreground">
+          <DialogHeader className="p-6 pb-4 border-b">
+            <DialogTitle>Edit Candidate Details</DialogTitle>
+            <DialogDescription>
+              Update potential team member details and notes.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="flex-1 overflow-y-auto p-6 space-y-4">
+            <div className="grid gap-2">
+              <label className="text-sm font-medium text-foreground">Candidate Name</label>
+              <Input placeholder="Candidate Full Name" value={newName} onChange={(e) => setNewName(e.target.value)} className="text-foreground" />
+            </div>
+            <div className="grid gap-2">
+              <label className="text-sm font-medium text-foreground">Email (Optional)</label>
+              <Input placeholder="candidate@example.com" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} className="text-foreground" />
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <label className="text-sm font-medium text-foreground">Gender (Optional)</label>
+                <Select value={newGender} onValueChange={(g: any) => setNewGender(g)}>
+                  <SelectTrigger className="text-foreground">
+                    <SelectValue placeholder="Select Gender" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="male">Male</SelectItem>
+                    <SelectItem value="female">Female</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <label className="text-sm font-medium text-foreground">Potential Role</label>
+                <Select value={newRole} onValueChange={(r: any) => setNewRole(r)}>
+                  <SelectTrigger className="text-foreground">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="president">President</SelectItem>
+                    <SelectItem value="secretary">Secretary</SelectItem>
+                    <SelectItem value="promoter">Promoter</SelectItem>
+                    <SelectItem value="admin">Administrator</SelectItem>
+                    <SelectItem value="member">Staff/Member</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid gap-2">
+              <div className="flex justify-between items-center">
+                <label className="text-sm font-medium text-foreground">Date of Birth (Optional)</label>
+                {newDob && (
+                  <span className="text-[11px] font-bold text-primary">
+                    Age: {calculateAge(newDob)} yrs
+                  </span>
+                )}
+              </div>
+              <Input 
+                type="date" 
+                value={newDob} 
+                onChange={(e) => setNewDob(e.target.value)} 
+                className="text-foreground" 
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <label className="text-sm font-medium text-foreground">Phone Number (Optional)</label>
+              <Input placeholder="e.g. +91 9876543210" value={newPhone} onChange={(e) => setNewPhone(e.target.value)} className="text-foreground" />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <label className="text-sm font-medium text-foreground">Aadhar Number (Optional)</label>
+                <Input 
+                  placeholder="12-digit Aadhar" 
+                  value={newAadharNo} 
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/\D/g, '').substring(0, 12);
+                    setNewAadharNo(val);
+                  }} 
+                  className="text-foreground font-mono font-medium" 
+                />
+              </div>
+              <div className="grid gap-2">
+                <label className="text-sm font-medium text-foreground">PAN Number (Optional)</label>
+                <Input 
+                  placeholder="10-char PAN" 
+                  value={newPanNo} 
+                  onChange={(e) => setNewPanNo(e.target.value.toUpperCase().substring(0, 10))} 
+                  className="text-foreground font-mono uppercase font-medium" 
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-2">
+              <label className="text-sm font-medium text-foreground">Onboarding Notes</label>
+              <Input placeholder="e.g. Needs specialized training..." value={newNotes} onChange={(e) => setNewNotes(e.target.value)} className="text-foreground" />
+            </div>
+          </div>
+
+          <DialogFooter className="p-6 pt-3 bg-muted/10 border-t">
+            <Button variant="outline" onClick={() => { setIsEditOnboardingOpen(false); resetAddForm(); }} className="text-foreground">Cancel</Button>
+            <Button disabled={isSubmitting} onClick={handleEditOnboarding}>
+               {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
+               Save Changes
             </Button>
           </DialogFooter>
         </DialogContent>
