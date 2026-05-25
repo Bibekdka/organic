@@ -106,7 +106,28 @@ export function MembersPage() {
   const [newName, setNewName] = React.useState('');
   const [newEmail, setNewEmail] = React.useState('');
   const [newShares, setNewShares] = React.useState('10');
+  const [newSharesRupees, setNewSharesRupees] = React.useState('100');
   const [newRole, setNewRole] = React.useState<Member['role']>('member');
+
+  const handleSharesChange = (val: string) => {
+    setNewShares(val);
+    const numeric = parseFloat(val);
+    if (!isNaN(numeric)) {
+      setNewSharesRupees((numeric * 10).toString());
+    } else {
+      setNewSharesRupees('');
+    }
+  };
+
+  const handleRupeesChange = (val: string) => {
+    setNewSharesRupees(val);
+    const numeric = parseFloat(val);
+    if (!isNaN(numeric)) {
+      setNewShares((numeric / 10).toString());
+    } else {
+      setNewShares('');
+    }
+  };
   const [newGender, setNewGender] = React.useState<'male' | 'female' | 'other'>('male');
   const [newDob, setNewDob] = React.useState('');
   const [newAadharNo, setNewAadharNo] = React.useState('');
@@ -280,6 +301,7 @@ export function MembersPage() {
     setNewName('');
     setNewEmail('');
     setNewShares('10');
+    setNewSharesRupees('100');
     setNewRole('member');
     setNewGender('male');
     setNewDob('');
@@ -1468,9 +1490,33 @@ export function MembersPage() {
               </div>
             </div>
 
-            <div className="grid gap-2">
-                <label className="text-sm font-medium text-foreground">Equity Shares (Units)</label>
-                <Input placeholder="10" type="number" value={newShares} onChange={(e) => setNewShares(e.target.value)} className="text-foreground" />
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <label className="text-sm font-medium text-foreground flex items-center justify-between">
+                  <span>Shares (Units)</span>
+                  <span className="text-[10px] text-muted-foreground font-semibold">1 share = ₹10</span>
+                </label>
+                <Input 
+                  type="number" 
+                  placeholder="10" 
+                  value={newShares} 
+                  onChange={(e) => handleSharesChange(e.target.value)} 
+                  className="text-foreground" 
+                />
+              </div>
+              <div className="grid gap-2">
+                <label className="text-sm font-medium text-foreground">Amount (Rupees / ₹)</label>
+                <div className="relative">
+                  <span className="absolute left-3 top-2.5 text-xs text-muted-foreground select-none font-medium">₹</span>
+                  <Input 
+                    type="number" 
+                    placeholder="100" 
+                    value={newSharesRupees} 
+                    onChange={(e) => handleRupeesChange(e.target.value)} 
+                    className="text-foreground pl-7" 
+                  />
+                </div>
+              </div>
             </div>
           </div>
           
