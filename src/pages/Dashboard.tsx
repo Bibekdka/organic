@@ -728,25 +728,80 @@ export function Dashboard() {
                
                {/* Month Controls */}
                <div className="flex items-center gap-2 bg-white/5 p-1 rounded-lg border border-white/5 self-start sm:self-auto">
-                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => {
-                     setCalendarDate(prev => {
-                        const next = new Date(prev);
-                        next.setMonth(prev.getMonth() - 1);
-                        return next;
-                     });
-                  }}>
+                  <Button 
+                     variant="outline" 
+                     size="icon" 
+                     className="h-7 w-7 bg-white/5 border border-white/10 text-primary hover:bg-white/10 hover:text-primary-foreground focus:outline-none transition-all duration-200" 
+                     onClick={() => {
+                        setCalendarDate(prev => {
+                           const next = new Date(prev);
+                           next.setMonth(prev.getMonth() - 1);
+                           return next;
+                        });
+                     }}
+                     title="Previous Month"
+                  >
                      <ChevronLeft className="w-4 h-4 text-primary" />
                   </Button>
-                  <span className="text-xs font-bold text-foreground min-w-[90px] text-center capitalize">
-                     {calendarDate.toLocaleString('default', { month: 'short', year: 'numeric' })}
-                  </span>
-                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => {
-                     setCalendarDate(prev => {
-                        const next = new Date(prev);
-                        next.setMonth(prev.getMonth() + 1);
-                        return next;
-                     });
-                  }}>
+                  
+                  <div className="flex items-center gap-1 px-1">
+                     <select
+                        aria-label="Select calendar month"
+                        value={calendarDate.getMonth()}
+                        onChange={(e) => {
+                           const newMonth = parseInt(e.target.value, 10);
+                           setCalendarDate(prev => {
+                              const next = new Date(prev);
+                              next.setMonth(newMonth);
+                              return next;
+                           });
+                        }}
+                        className="bg-transparent border-none text-xs font-black text-foreground focus:outline-none focus:ring-0 cursor-pointer py-0 h-auto uppercase tracking-wider"
+                     >
+                        {Array.from({ length: 12 }).map((_, idx) => (
+                           <option key={idx} value={idx} className="bg-neutral-950 text-foreground font-sans">
+                              {new Date(2026, idx, 1).toLocaleString('default', { month: 'short' })}
+                           </option>
+                        ))}
+                     </select>
+                     
+                     <select
+                        aria-label="Select calendar year"
+                        value={calendarDate.getFullYear()}
+                        onChange={(e) => {
+                           const newYear = parseInt(e.target.value, 10);
+                           setCalendarDate(prev => {
+                              const next = new Date(prev);
+                              next.setFullYear(newYear);
+                              return next;
+                           });
+                        }}
+                        className="bg-transparent border-none text-xs font-black text-primary hover:text-primary-foreground focus:outline-none focus:ring-0 cursor-pointer py-0 h-auto tracking-wider"
+                     >
+                        {Array.from({ length: 16 }).map((_, idx) => {
+                           const yr = new Date().getFullYear() - 5 + idx; // Gives e.g., 2021 to 2036
+                           return (
+                              <option key={yr} value={yr} className="bg-neutral-950 text-foreground font-sans">
+                                 {yr}
+                              </option>
+                           );
+                        })}
+                     </select>
+                  </div>
+
+                  <Button 
+                     variant="outline" 
+                     size="icon" 
+                     className="h-7 w-7 bg-white/5 border border-white/10 text-primary hover:bg-white/10 hover:text-primary-foreground focus:outline-none transition-all duration-200" 
+                     onClick={() => {
+                        setCalendarDate(prev => {
+                           const next = new Date(prev);
+                           next.setMonth(prev.getMonth() + 1);
+                           return next;
+                        });
+                     }}
+                     title="Next Month"
+                  >
                      <ChevronRight className="w-4 h-4 text-primary" />
                   </Button>
                </div>
@@ -922,28 +977,32 @@ export function Dashboard() {
                            placeholder="e.g. Bulk ingredients..." 
                            value={newEventText} 
                            onChange={(e) => setNewEventText(e.target.value)} 
-                           className="text-[11px] h-8 text-foreground"
+                           className="text-[11px] h-8 text-foreground bg-neutral-900 border border-white/5 focus:border-primary/50"
                         />
                         <Input 
                            type="number" 
                            placeholder="optional ₹ amount" 
                            value={newEventAmount} 
                            onChange={(e) => setNewEventAmount(e.target.value)} 
-                           className="text-[11px] h-8 text-foreground font-mono"
+                           className="text-[11px] h-8 text-foreground font-mono bg-neutral-900 border border-white/5 focus:border-primary/50"
                         />
                      </div>
                      <div className="flex gap-2">
                         <select 
+                           aria-label="Select dynamic planner milestone type"
                            value={newEventType} 
                            onChange={(e: any) => setNewEventType(e.target.value)}
-                           className="text-[11px] bg-neutral-900 border border-white/5 rounded-md px-2 flex-grow text-foreground h-8 focus:outline-none"
+                           className="text-[11px] bg-neutral-900 border border-white/5 rounded-md px-2 flex-grow text-foreground h-8 focus:outline-none focus:border-primary/50"
                         >
                            <option value="general">Milestone/Note</option>
                            <option value="expense">Planned Expense</option>
                            <option value="income">Planned Income</option>
                         </select>
-                        <Button onClick={handleAddPlannedEvent} className="h-8 shrink-0 text-xs px-3">
-                           <Plus className="w-3 h-3 mr-1" /> Add
+                        <Button 
+                           onClick={handleAddPlannedEvent} 
+                           className="h-8 shrink-0 text-xs px-4 bg-primary text-primary-foreground font-bold hover:opacity-90 active:scale-95 transition-all shadow-md border border-white/10"
+                        >
+                           <Plus className="w-3.5 h-3.5 mr-1" /> Add
                         </Button>
                      </div>
                   </div>
