@@ -977,14 +977,14 @@ export function Dashboard() {
                            placeholder="e.g. Bulk ingredients..." 
                            value={newEventText} 
                            onChange={(e) => setNewEventText(e.target.value)} 
-                           className="text-[11px] h-8 text-foreground bg-neutral-900 border border-white/5 focus:border-primary/50"
+                           className="text-[11px] h-8 text-foreground bg-background border border-input focus:border-primary/50 placeholder:text-muted-foreground/60"
                         />
                         <Input 
                            type="number" 
                            placeholder="optional ₹ amount" 
                            value={newEventAmount} 
                            onChange={(e) => setNewEventAmount(e.target.value)} 
-                           className="text-[11px] h-8 text-foreground font-mono bg-neutral-900 border border-white/5 focus:border-primary/50"
+                           className="text-[11px] h-8 text-foreground font-mono bg-background border border-input focus:border-primary/50 placeholder:text-muted-foreground/60"
                         />
                      </div>
                      <div className="flex gap-2">
@@ -992,11 +992,11 @@ export function Dashboard() {
                            aria-label="Select dynamic planner milestone type"
                            value={newEventType} 
                            onChange={(e: any) => setNewEventType(e.target.value)}
-                           className="text-[11px] bg-neutral-900 border border-white/5 rounded-md px-2 flex-grow text-foreground h-8 focus:outline-none focus:border-primary/50"
+                           className="text-[11px] bg-background border border-input rounded-md px-2 flex-grow text-foreground h-8 focus:outline-none focus:border-primary/50"
                         >
-                           <option value="general">Milestone/Note</option>
-                           <option value="expense">Planned Expense</option>
-                           <option value="income">Planned Income</option>
+                           <option value="general" className="bg-background text-foreground">Milestone/Note</option>
+                           <option value="expense" className="bg-background text-foreground">Planned Expense</option>
+                           <option value="income" className="bg-background text-foreground">Planned Income</option>
                         </select>
                         <Button 
                            onClick={handleAddPlannedEvent} 
