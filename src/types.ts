@@ -27,6 +27,7 @@ export type Member = {
   email?: string;
   role: 'admin' | 'member' | 'president' | 'secretary' | 'promoter';
   status: 'active' | 'inactive';
+  gender?: 'male' | 'female' | 'other';
   joinedAt: number;
   shares: number; // Added this
   avatarUrl?: string; // Permanant avatar

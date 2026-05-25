@@ -39,6 +39,7 @@
         "email": { "type": "string" },
         "role": { "type": "string", "enum": ["admin", "member"] },
         "status": { "type": "string", "enum": ["active", "inactive"] },
+        "gender": { "type": "string", "enum": ["male", "female", "other"] },
         "joinedAt": { "type": "integer" },
         "avatarUrl": { "type": "string" },
         "createdAt": { "type": "object" },

@@ -107,6 +107,7 @@ export function MembersPage() {
   const [newEmail, setNewEmail] = React.useState('');
   const [newShares, setNewShares] = React.useState('10');
   const [newRole, setNewRole] = React.useState<Member['role']>('member');
+  const [newGender, setNewGender] = React.useState<'male' | 'female' | 'other'>('male');
   const [newNotes, setNewNotes] = React.useState('');
   const [newAvatar, setNewAvatar] = React.useState(`https://api.dicebear.com/7.x/avataaars/svg?seed=${Math.random().toString(36).substring(7)}`);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
@@ -123,6 +124,7 @@ export function MembersPage() {
         role: newRole,
         status: 'active',
         avatarUrl: newAvatar,
+        gender: newGender,
         joinedAt: Date.now(),
         createdAt: serverTimestamp(),
         createdByName: attr.userName,
@@ -211,6 +213,7 @@ export function MembersPage() {
         name: newName,
         email: newEmail,
         role: newRole,
+        gender: newGender,
         updatedByName: attr.userName,
         updatedByDevice: attr.device,
         updatedAt: serverTimestamp()
@@ -230,6 +233,7 @@ export function MembersPage() {
     setNewName(member.name);
     setNewEmail(member.email || '');
     setNewRole(member.role);
+    setNewGender(member.gender || 'male');
     setIsEditOpen(true);
   };
 
@@ -238,6 +242,7 @@ export function MembersPage() {
     setNewEmail('');
     setNewShares('10');
     setNewRole('member');
+    setNewGender('male');
     setNewNotes('');
     setNewAvatar(`https://api.dicebear.com/7.x/avataaars/svg?seed=${Math.random().toString(36).substring(7)}`);
   };
@@ -285,6 +290,37 @@ export function MembersPage() {
   };
 
   const totalShares = React.useMemo(() => members.reduce((sum, m) => sum + (m.shares || 0), 0), [members]);
+
+  const genderStats = React.useMemo(() => {
+    const total = members.length;
+    if (total === 0) {
+      return { maleCount: 0, femaleCount: 0, otherCount: 0, malePercentage: 0, femalePercentage: 0, otherPercentage: 0 };
+    }
+    
+    let maleCount = 0;
+    let femaleCount = 0;
+    let otherCount = 0;
+    
+    members.forEach(m => {
+      const g = m.gender?.toLowerCase() || 'unspecified';
+      if (g === 'male') {
+        maleCount++;
+      } else if (g === 'female') {
+        femaleCount++;
+      } else {
+        otherCount++;
+      }
+    });
+
+    return {
+      maleCount,
+      femaleCount,
+      otherCount,
+      malePercentage: parseFloat(((maleCount / total) * 100).toFixed(1)),
+      femalePercentage: parseFloat(((femaleCount / total) * 100).toFixed(1)),
+      otherPercentage: parseFloat(((otherCount / total) * 100).toFixed(1))
+    };
+  }, [members]);
 
   const filteredMembers = members.filter(m => 
     m.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -355,6 +391,89 @@ export function MembersPage() {
         </TabsList>
 
         <TabsContent value="active" className="space-y-6 m-0 animate-in fade-in-50 duration-500">
+          {/* Demographics Summary Bar */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <Card className="bg-card border-none shadow-sm overflow-hidden">
+              <CardContent className="p-6 flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-1">Total Members</p>
+                  <h3 className="text-2xl font-black text-foreground">{members.length}</h3>
+                  <p className="text-xs text-muted-foreground mt-1">Registered organizational standing</p>
+                </div>
+                <div className="p-3 bg-primary/5 rounded-full text-primary">
+                  <Users className="w-6 h-6" />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-card border-none shadow-sm overflow-hidden md:col-span-2">
+              <CardContent className="p-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+                  <div>
+                    <h4 className="text-sm font-bold text-foreground">Gender Demographics</h4>
+                    <p className="text-xs text-muted-foreground">Proportion of men and women in the organization</p>
+                  </div>
+                  <div className="flex items-center gap-4 text-xs font-semibold text-foreground">
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-full bg-indigo-500" />
+                      <span>Men ({genderStats.malePercentage}%)</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
+                      <span>Women ({genderStats.femalePercentage}%)</span>
+                    </div>
+                    {genderStats.otherPercentage > 0 && (
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+                        <span>Other ({genderStats.otherPercentage}%)</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Progress Visual Bar */}
+                <div className="h-3 w-full bg-muted rounded-full overflow-hidden flex">
+                  {genderStats.malePercentage > 0 && (
+                    <div 
+                      className="bg-indigo-500 h-full transition-all duration-500 animate-pulse-slow" 
+                      style={{ width: `${genderStats.malePercentage}%` }}
+                      title={`Men: ${genderStats.maleCount} (${genderStats.malePercentage}%)`}
+                    />
+                  )}
+                  {genderStats.femalePercentage > 0 && (
+                    <div 
+                      className="bg-rose-500 h-full transition-all duration-500" 
+                      style={{ width: `${genderStats.femalePercentage}%` }}
+                      title={`Women: ${genderStats.femaleCount} (${genderStats.femalePercentage}%)`}
+                    />
+                  )}
+                  {genderStats.otherPercentage > 0 && (
+                    <div 
+                      className="bg-amber-500 h-full transition-all duration-500" 
+                      style={{ width: `${genderStats.otherPercentage}%` }}
+                      title={`Other: ${genderStats.otherCount} (${genderStats.otherPercentage}%)`}
+                    />
+                  )}
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 mt-4 text-center">
+                  <div className="p-2 rounded bg-muted/20">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Men</p>
+                    <p className="text-sm font-black text-indigo-500">{genderStats.maleCount} <span className="text-[10px] font-normal text-muted-foreground">({genderStats.malePercentage}%)</span></p>
+                  </div>
+                  <div className="p-2 rounded bg-muted/20">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Women</p>
+                    <p className="text-sm font-black text-rose-500">{genderStats.femaleCount} <span className="text-[10px] font-normal text-muted-foreground">({genderStats.femalePercentage}%)</span></p>
+                  </div>
+                  <div className="p-2 rounded bg-muted/20">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Other / Unspecified</p>
+                    <p className="text-sm font-black text-amber-500">{genderStats.otherCount} <span className="text-[10px] font-normal text-muted-foreground">({genderStats.otherPercentage}%)</span></p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
              <div className="md:col-span-2 relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -424,10 +543,20 @@ export function MembersPage() {
                           </Avatar>
                           <div className="flex flex-col min-w-0">
                             <span className="font-semibold text-sm truncate">{member.name}</span>
-                            <div className="flex items-center gap-1">
+                            <div className="flex items-center gap-1 flex-wrap">
                               <Badge variant="outline" className="text-[9px] h-3.5 px-1 font-bold bg-secondary/20 text-muted-foreground border-none capitalize">
                                 {member.role}
                               </Badge>
+                              {member.gender && (
+                                <Badge variant="outline" className={cn(
+                                  "text-[9px] h-3.5 px-1 font-bold border-none capitalize",
+                                  member.gender === 'male' ? "bg-indigo-500/10 text-indigo-500" :
+                                  member.gender === 'female' ? "bg-rose-500/10 text-rose-500" :
+                                  "bg-amber-500/10 text-amber-500"
+                                )}>
+                                  {member.gender}
+                                </Badge>
+                              )}
                               <span className="text-[9px] text-muted-foreground truncate">{member.email}</span>
                             </div>
                           </div>
@@ -535,9 +664,21 @@ export function MembersPage() {
                       <div>
                         <h4 className="text-sm font-bold text-foreground leading-none mb-1">{member.name}</h4>
                         <div className="flex flex-col gap-1">
-                          <Badge variant="outline" className="text-[8px] h-3.5 w-fit px-1 font-bold bg-secondary/20 text-muted-foreground border-none capitalize">
-                            {member.role}
-                          </Badge>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <Badge variant="outline" className="text-[8px] h-3.5 w-fit px-1 font-bold bg-secondary/20 text-muted-foreground border-none capitalize">
+                              {member.role}
+                            </Badge>
+                            {member.gender && (
+                              <Badge variant="outline" className={cn(
+                                "text-[8px] h-3.5 w-fit px-1 font-bold border-none capitalize",
+                                member.gender === 'male' ? "bg-indigo-500/10 text-indigo-500" :
+                                member.gender === 'female' ? "bg-rose-500/10 text-rose-500" :
+                                "bg-amber-500/10 text-amber-500"
+                              )}>
+                                {member.gender}
+                              </Badge>
+                            )}
+                          </div>
                           <p className="text-[10px] text-muted-foreground truncate max-w-[150px] leading-none">{member.email}</p>
                         </div>
                       </div>
@@ -952,6 +1093,19 @@ export function MembersPage() {
               <Input placeholder="john@example.com" type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} className="text-foreground" />
             </div>
             <div className="grid gap-2">
+              <label className="text-sm font-medium text-foreground">Gender</label>
+              <Select value={newGender} onValueChange={(g: any) => setNewGender(g)}>
+                <SelectTrigger className="text-foreground">
+                  <SelectValue placeholder="Select Gender" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="male">Male</SelectItem>
+                  <SelectItem value="female">Female</SelectItem>
+                  <SelectItem value="other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
               <label className="text-sm font-medium text-foreground">Official Role</label>
               <Select value={newRole} onValueChange={(r: any) => setNewRole(r)}>
                 <SelectTrigger className="text-foreground">
@@ -996,6 +1150,19 @@ export function MembersPage() {
             <div className="grid gap-2">
               <label className="text-sm font-medium text-foreground">Email Address</label>
               <Input placeholder="john@example.com" type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} className="text-foreground" />
+            </div>
+            <div className="grid gap-2">
+              <label className="text-sm font-medium text-foreground">Gender</label>
+              <Select value={newGender} onValueChange={(g: any) => setNewGender(g)}>
+                <SelectTrigger className="text-foreground">
+                  <SelectValue placeholder="Select Gender" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="male">Male</SelectItem>
+                  <SelectItem value="female">Female</SelectItem>
+                  <SelectItem value="other">Other</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="grid gap-2">
               <label className="text-sm font-medium text-foreground">Official Role</label>

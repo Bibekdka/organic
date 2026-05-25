@@ -101,6 +101,7 @@ service cloud.firestore {
              data.status in ['active', 'inactive'] &&
              data.shares is number &&
              (!data.keys().hasAny(['email']) || data.email is string) &&
+             (!data.keys().hasAny(['gender']) || data.gender in ['male', 'female', 'other']) &&
              (!data.keys().hasAny(['createdByName']) || data.createdByName is string) &&
              (!data.keys().hasAny(['updatedByName']) || data.updatedByName is string);
     }
@@ -125,7 +126,7 @@ service cloud.firestore {
     match /members/{memberId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn() && isValidMember(incoming());
-      allow update: if isSignedIn() && (incoming().diff(existing()).affectedKeys().hasOnly(['role', 'name', 'email', 'status', 'shares', 'avatarUrl', 'updatedAt', 'updatedByName', 'updatedByDevice']));
+      allow update: if isSignedIn() && (incoming().diff(existing()).affectedKeys().hasOnly(['role', 'name', 'email', 'status', 'shares', 'avatarUrl', 'gender', 'updatedAt', 'updatedByName', 'updatedByDevice']));
       allow delete: if isSignedIn();
     }
 
