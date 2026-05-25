@@ -86,6 +86,10 @@ service cloud.firestore {
              data.name is string && data.name.size() <= 200 &&
              (!data.keys().hasAny(['email']) || data.email is string) &&
              (!data.keys().hasAny(['gender']) || data.gender in ['male', 'female', 'other']) &&
+             (!data.keys().hasAny(['dob']) || data.dob is string) &&
+             (!data.keys().hasAny(['aadharNo']) || data.aadharNo is string) &&
+             (!data.keys().hasAny(['panNo']) || data.panNo is string) &&
+             (!data.keys().hasAny(['phone']) || data.phone is string) &&
              (!data.keys().hasAny(['suggestedRole']) || data.suggestedRole is string) &&
              (!data.keys().hasAny(['notes']) || data.notes is string) &&
              (!data.keys().hasAny(['createdByName']) || data.createdByName is string);
@@ -103,6 +107,10 @@ service cloud.firestore {
              data.shares is number &&
              (!data.keys().hasAny(['email']) || data.email is string) &&
              (!data.keys().hasAny(['gender']) || data.gender in ['male', 'female', 'other']) &&
+             (!data.keys().hasAny(['dob']) || data.dob is string) &&
+             (!data.keys().hasAny(['aadharNo']) || data.aadharNo is string) &&
+             (!data.keys().hasAny(['panNo']) || data.panNo is string) &&
+             (!data.keys().hasAny(['phone']) || data.phone is string) &&
              (!data.keys().hasAny(['createdByName']) || data.createdByName is string) &&
              (!data.keys().hasAny(['updatedByName']) || data.updatedByName is string);
     }
@@ -127,7 +135,7 @@ service cloud.firestore {
     match /members/{memberId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn() && isValidMember(incoming());
-      allow update: if isSignedIn() && (incoming().diff(existing()).affectedKeys().hasOnly(['role', 'name', 'email', 'status', 'shares', 'avatarUrl', 'gender', 'updatedAt', 'updatedByName', 'updatedByDevice']));
+      allow update: if isSignedIn() && (incoming().diff(existing()).affectedKeys().hasOnly(['role', 'name', 'email', 'status', 'shares', 'avatarUrl', 'gender', 'dob', 'aadharNo', 'panNo', 'phone', 'updatedAt', 'updatedByName', 'updatedByDevice']));
       allow delete: if isSignedIn();
     }
 

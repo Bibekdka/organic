@@ -108,9 +108,26 @@ export function MembersPage() {
   const [newShares, setNewShares] = React.useState('10');
   const [newRole, setNewRole] = React.useState<Member['role']>('member');
   const [newGender, setNewGender] = React.useState<'male' | 'female' | 'other'>('male');
+  const [newDob, setNewDob] = React.useState('');
+  const [newAadharNo, setNewAadharNo] = React.useState('');
+  const [newPanNo, setNewPanNo] = React.useState('');
+  const [newPhone, setNewPhone] = React.useState('');
   const [newNotes, setNewNotes] = React.useState('');
   const [newAvatar, setNewAvatar] = React.useState(`https://api.dicebear.com/7.x/avataaars/svg?seed=${Math.random().toString(36).substring(7)}`);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+
+  const calculateAge = (dobString: string | undefined): number | null => {
+    if (!dobString) return null;
+    const birthDate = new Date(dobString);
+    if (isNaN(birthDate.getTime())) return null;
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const m = today.getMonth() - birthDate.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    return age;
+  };
 
   const handleAddMember = async () => {
     if (!newName) return;
@@ -125,6 +142,10 @@ export function MembersPage() {
         status: 'active',
         avatarUrl: newAvatar,
         gender: newGender,
+        dob: newDob || '',
+        aadharNo: newAadharNo || '',
+        panNo: newPanNo || '',
+        phone: newPhone || '',
         joinedAt: Date.now(),
         createdAt: serverTimestamp(),
         createdByName: attr.userName,
@@ -151,6 +172,10 @@ export function MembersPage() {
         email: newEmail || '',
         suggestedRole: newRole,
         gender: newGender,
+        dob: newDob || '',
+        aadharNo: newAadharNo || '',
+        panNo: newPanNo || '',
+        phone: newPhone || '',
         notes: newNotes || '',
         createdAt: serverTimestamp(),
         createdByName: attr.userName,
@@ -179,6 +204,10 @@ export function MembersPage() {
         role: record.suggestedRole || 'member',
         status: 'active',
         gender: record.gender || 'male',
+        dob: record.dob || '',
+        aadharNo: record.aadharNo || '',
+        panNo: record.panNo || '',
+        phone: record.phone || '',
         avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${record.name}`,
         joinedAt: Date.now(),
         createdAt: serverTimestamp(),
@@ -216,6 +245,10 @@ export function MembersPage() {
         email: newEmail,
         role: newRole,
         gender: newGender,
+        dob: newDob || '',
+        aadharNo: newAadharNo || '',
+        panNo: newPanNo || '',
+        phone: newPhone || '',
         updatedByName: attr.userName,
         updatedByDevice: attr.device,
         updatedAt: serverTimestamp()
@@ -236,6 +269,10 @@ export function MembersPage() {
     setNewEmail(member.email || '');
     setNewRole(member.role);
     setNewGender(member.gender || 'male');
+    setNewDob(member.dob || '');
+    setNewAadharNo(member.aadharNo || '');
+    setNewPanNo(member.panNo || '');
+    setNewPhone(member.phone || '');
     setIsEditOpen(true);
   };
 
@@ -245,6 +282,10 @@ export function MembersPage() {
     setNewShares('10');
     setNewRole('member');
     setNewGender('male');
+    setNewDob('');
+    setNewAadharNo('');
+    setNewPanNo('');
+    setNewPhone('');
     setNewNotes('');
     setNewAvatar(`https://api.dicebear.com/7.x/avataaars/svg?seed=${Math.random().toString(36).substring(7)}`);
   };
@@ -860,6 +901,44 @@ export function MembersPage() {
                      </div>
                   </div>
 
+                  {/* Optional Demographics Details */}
+                  {(selectedMember.gender || selectedMember.dob || selectedMember.phone || selectedMember.aadharNo || selectedMember.panNo) && (
+                     <div className="p-4 rounded-xl bg-muted/40 border border-border/40 grid grid-cols-2 gap-x-6 gap-y-3 text-xs">
+                        {selectedMember.gender && (
+                           <div>
+                              <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider mb-0.5">Gender</p>
+                              <p className="font-semibold text-foreground capitalize">{selectedMember.gender}</p>
+                           </div>
+                        )}
+                        {selectedMember.dob && (
+                           <div>
+                              <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider mb-0.5">Date of Birth</p>
+                              <p className="font-semibold text-foreground">
+                                 {selectedMember.dob} <span className="text-[10px] text-primary font-bold">({calculateAge(selectedMember.dob)} yrs)</span>
+                              </p>
+                           </div>
+                        )}
+                        {selectedMember.phone && (
+                           <div>
+                              <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider mb-0.5">Phone Number</p>
+                              <p className="font-semibold text-foreground">{selectedMember.phone}</p>
+                           </div>
+                        )}
+                        {selectedMember.aadharNo && (
+                           <div>
+                              <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider mb-0.5">Aadhar Number</p>
+                              <p className="font-mono font-medium text-foreground">{selectedMember.aadharNo}</p>
+                           </div>
+                        )}
+                        {selectedMember.panNo && (
+                           <div className="col-span-full sm:col-span-1">
+                              <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider mb-0.5">PAN Number</p>
+                              <p className="font-mono font-medium text-foreground uppercase">{selectedMember.panNo}</p>
+                           </div>
+                        )}
+                     </div>
+                  )}
+
                   <Tabs defaultValue="equity" className="w-full">
                     <TabsList className="grid grid-cols-2 w-full mb-6 py-1 bg-muted/50">
                         <TabsTrigger value="equity" className="text-xs font-bold gap-2">
@@ -1029,57 +1108,109 @@ export function MembersPage() {
 
       {/* Onboarding Add Dialog */}
       <Dialog open={isOnboardingAddOpen} onOpenChange={setIsOnboardingAddOpen}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
+        <DialogContent className="sm:max-w-[450px] max-h-[90vh] flex flex-col p-0 overflow-hidden text-foreground">
+          <DialogHeader className="p-6 pb-4 border-b">
             <DialogTitle>Add to Boarding Queue</DialogTitle>
             <DialogDescription>
               Collect names and info for potential team members before they join.
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-4 text-foreground">
+          
+          <div className="flex-1 overflow-y-auto p-6 space-y-4">
             <div className="grid gap-2">
-              <label className="text-sm font-medium">Candidate Name</label>
-              <Input placeholder="Candidate Full Name" value={newName} onChange={(e) => setNewName(e.target.value)} />
+              <label className="text-sm font-medium text-foreground">Candidate Name</label>
+              <Input placeholder="Candidate Full Name" value={newName} onChange={(e) => setNewName(e.target.value)} className="text-foreground" />
             </div>
             <div className="grid gap-2">
-              <label className="text-sm font-medium">Email (Optional)</label>
-              <Input placeholder="candidate@example.com" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} />
+              <label className="text-sm font-medium text-foreground">Email (Optional)</label>
+              <Input placeholder="candidate@example.com" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} className="text-foreground" />
             </div>
-            <div className="grid gap-2">
-              <label className="text-sm font-medium">Gender</label>
-              <Select value={newGender} onValueChange={(g: any) => setNewGender(g)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select Gender" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="male">Male</SelectItem>
-                  <SelectItem value="female">Female</SelectItem>
-                  <SelectItem value="other">Other</SelectItem>
-                </SelectContent>
-              </Select>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <label className="text-sm font-medium text-foreground">Gender (Optional)</label>
+                <Select value={newGender} onValueChange={(g: any) => setNewGender(g)}>
+                  <SelectTrigger className="text-foreground">
+                    <SelectValue placeholder="Select Gender" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="male">Male</SelectItem>
+                    <SelectItem value="female">Female</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <label className="text-sm font-medium text-foreground">Potential Role</label>
+                <Select value={newRole} onValueChange={(r: any) => setNewRole(r)}>
+                  <SelectTrigger className="text-foreground">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="president">President</SelectItem>
+                    <SelectItem value="secretary">Secretary</SelectItem>
+                    <SelectItem value="promoter">Promoter</SelectItem>
+                    <SelectItem value="admin">Administrator</SelectItem>
+                    <SelectItem value="member">Staff/Member</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
+
             <div className="grid gap-2">
-              <label className="text-sm font-medium">Potential Role</label>
-              <Select value={newRole} onValueChange={(r: any) => setNewRole(r)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="president">President</SelectItem>
-                  <SelectItem value="secretary">Secretary</SelectItem>
-                  <SelectItem value="promoter">Promoter</SelectItem>
-                  <SelectItem value="admin">Administrator</SelectItem>
-                  <SelectItem value="member">Staff/Member</SelectItem>
-                </SelectContent>
-              </Select>
+              <div className="flex justify-between items-center">
+                <label className="text-sm font-medium text-foreground">Date of Birth (Optional)</label>
+                {newDob && (
+                  <span className="text-[11px] font-bold text-primary">
+                    Age: {calculateAge(newDob)} yrs
+                  </span>
+                )}
+              </div>
+              <Input 
+                type="date" 
+                value={newDob} 
+                onChange={(e) => setNewDob(e.target.value)} 
+                className="text-foreground" 
+              />
             </div>
+
             <div className="grid gap-2">
-              <label className="text-sm font-medium">Onboarding Notes</label>
-              <Input placeholder="e.g. Needs specialized training, starting next month..." value={newNotes} onChange={(e) => setNewNotes(e.target.value)} />
+              <label className="text-sm font-medium text-foreground">Phone Number (Optional)</label>
+              <Input placeholder="e.g. +91 9876543210" value={newPhone} onChange={(e) => setNewPhone(e.target.value)} className="text-foreground" />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <label className="text-sm font-medium text-foreground">Aadhar Number (Optional)</label>
+                <Input 
+                  placeholder="12-digit Aadhar" 
+                  value={newAadharNo} 
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/\D/g, '').substring(0, 12);
+                    setNewAadharNo(val);
+                  }} 
+                  className="text-foreground font-mono font-medium" 
+                />
+              </div>
+              <div className="grid gap-2">
+                <label className="text-sm font-medium text-foreground">PAN Number (Optional)</label>
+                <Input 
+                  placeholder="10-char PAN" 
+                  value={newPanNo} 
+                  onChange={(e) => setNewPanNo(e.target.value.toUpperCase().substring(0, 10))} 
+                  className="text-foreground font-mono uppercase font-medium" 
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-2">
+              <label className="text-sm font-medium text-foreground">Onboarding Notes</label>
+              <Input placeholder="e.g. Needs specialized training..." value={newNotes} onChange={(e) => setNewNotes(e.target.value)} className="text-foreground" />
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => { setIsOnboardingAddOpen(false); resetAddForm(); }}>Cancel</Button>
+
+          <DialogFooter className="p-6 pt-3 bg-muted/10 border-t">
+            <Button variant="outline" onClick={() => { setIsOnboardingAddOpen(false); resetAddForm(); }} className="text-foreground">Cancel</Button>
             <Button disabled={isSubmitting} onClick={handleAddOnboarding}>
                {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <UserPlus className="w-4 h-4 mr-2" />}
                Queue Candidate
@@ -1089,14 +1220,15 @@ export function MembersPage() {
       </Dialog>
 
       <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
+        <DialogContent className="sm:max-w-[450px] max-h-[90vh] flex flex-col p-0 overflow-hidden text-foreground">
+          <DialogHeader className="p-6 pb-4 border-b">
             <DialogTitle>Add New Member</DialogTitle>
             <DialogDescription>
               Enter the details to invite a new member to the organization.
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
+          
+          <div className="flex-1 overflow-y-auto p-6 space-y-4">
             <div className="flex flex-col items-center gap-4 mb-2">
                <Avatar className="w-20 h-20 border-4 border-primary/20 shadow-xl">
                   <AvatarImage src={newAvatar} />
@@ -1111,48 +1243,101 @@ export function MembersPage() {
                  Generate New Avatar
                </Button>
             </div>
+            
             <div className="grid gap-2">
               <label className="text-sm font-medium text-foreground">Full Name</label>
               <Input placeholder="John Doe" value={newName} onChange={(e) => setNewName(e.target.value)} className="text-foreground" />
             </div>
+            
             <div className="grid gap-2">
               <label className="text-sm font-medium text-foreground">Email Address (Optional)</label>
               <Input placeholder="john@example.com" type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} className="text-foreground" />
             </div>
-            <div className="grid gap-2">
-              <label className="text-sm font-medium text-foreground">Gender</label>
-              <Select value={newGender} onValueChange={(g: any) => setNewGender(g)}>
-                <SelectTrigger className="text-foreground">
-                  <SelectValue placeholder="Select Gender" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="male">Male</SelectItem>
-                  <SelectItem value="female">Female</SelectItem>
-                  <SelectItem value="other">Other</SelectItem>
-                </SelectContent>
-              </Select>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <label className="text-sm font-medium text-foreground">Gender (Optional)</label>
+                <Select value={newGender} onValueChange={(g: any) => setNewGender(g)}>
+                  <SelectTrigger className="text-foreground">
+                    <SelectValue placeholder="Select Gender" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="male">Male</SelectItem>
+                    <SelectItem value="female">Female</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <label className="text-sm font-medium text-foreground">Official Role</label>
+                <Select value={newRole} onValueChange={(r: any) => setNewRole(r)}>
+                  <SelectTrigger className="text-foreground">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="president">President</SelectItem>
+                    <SelectItem value="secretary">Secretary</SelectItem>
+                    <SelectItem value="promoter">Promoter</SelectItem>
+                    <SelectItem value="admin">Administrator</SelectItem>
+                    <SelectItem value="member">Staff/Member</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
+
             <div className="grid gap-2">
-              <label className="text-sm font-medium text-foreground">Official Role</label>
-              <Select value={newRole} onValueChange={(r: any) => setNewRole(r)}>
-                <SelectTrigger className="text-foreground">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="president">President</SelectItem>
-                  <SelectItem value="secretary">Secretary</SelectItem>
-                  <SelectItem value="promoter">Promoter</SelectItem>
-                  <SelectItem value="admin">Administrator</SelectItem>
-                  <SelectItem value="member">Staff/Member</SelectItem>
-                </SelectContent>
-              </Select>
+              <div className="flex justify-between items-center">
+                <label className="text-sm font-medium text-foreground">Date of Birth (Optional)</label>
+                {newDob && (
+                  <span className="text-[11px] font-bold text-primary">
+                    Age: {calculateAge(newDob)} yrs
+                  </span>
+                )}
+              </div>
+              <Input 
+                type="date" 
+                value={newDob} 
+                onChange={(e) => setNewDob(e.target.value)} 
+                className="text-foreground" 
+              />
             </div>
+
+            <div className="grid gap-2">
+              <label className="text-sm font-medium text-foreground">Phone Number (Optional)</label>
+              <Input placeholder="e.g. +91 9876543210" value={newPhone} onChange={(e) => setNewPhone(e.target.value)} className="text-foreground" />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <label className="text-sm font-medium text-foreground">Aadhar Number (Optional)</label>
+                <Input 
+                  placeholder="12-digit Aadhar" 
+                  value={newAadharNo} 
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/\D/g, '').substring(0, 12);
+                    setNewAadharNo(val);
+                  }} 
+                  className="text-foreground font-mono font-medium" 
+                />
+              </div>
+              <div className="grid gap-2">
+                <label className="text-sm font-medium text-foreground">PAN Number (Optional)</label>
+                <Input 
+                  placeholder="10-char PAN" 
+                  value={newPanNo} 
+                  onChange={(e) => setNewPanNo(e.target.value.toUpperCase().substring(0, 10))} 
+                  className="text-foreground font-mono uppercase font-medium" 
+                />
+              </div>
+            </div>
+
             <div className="grid gap-2">
                 <label className="text-sm font-medium text-foreground">Equity Shares (Units)</label>
                 <Input placeholder="10" type="number" value={newShares} onChange={(e) => setNewShares(e.target.value)} className="text-foreground" />
             </div>
           </div>
-          <DialogFooter>
+          
+          <DialogFooter className="p-6 pt-3 bg-muted/10 border-t">
             <Button variant="outline" onClick={() => { setIsAddOpen(false); resetAddForm(); }} className="text-foreground">Cancel</Button>
             <Button disabled={isSubmitting} onClick={handleAddMember}>
                {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Check className="w-4 h-4 mr-2" />}
@@ -1164,50 +1349,102 @@ export function MembersPage() {
 
       {/* Edit Member Dialog */}
       <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
+        <DialogContent className="sm:max-w-[450px] max-h-[90vh] flex flex-col p-0 overflow-hidden text-foreground">
+          <DialogHeader className="p-6 pb-4 border-b">
             <DialogTitle>Edit Member</DialogTitle>
             <DialogDescription>Update member profile and organizational standing.</DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
+          
+          <div className="flex-1 overflow-y-auto p-6 space-y-4">
             <div className="grid gap-2">
               <label className="text-sm font-medium text-foreground">Full Name</label>
               <Input placeholder="John Doe" value={newName} onChange={(e) => setNewName(e.target.value)} className="text-foreground" />
             </div>
+            
             <div className="grid gap-2">
               <label className="text-sm font-medium text-foreground">Email Address</label>
               <Input placeholder="john@example.com" type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} className="text-foreground" />
             </div>
-            <div className="grid gap-2">
-              <label className="text-sm font-medium text-foreground">Gender</label>
-              <Select value={newGender} onValueChange={(g: any) => setNewGender(g)}>
-                <SelectTrigger className="text-foreground">
-                  <SelectValue placeholder="Select Gender" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="male">Male</SelectItem>
-                  <SelectItem value="female">Female</SelectItem>
-                  <SelectItem value="other">Other</SelectItem>
-                </SelectContent>
-              </Select>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <label className="text-sm font-medium text-foreground">Gender (Optional)</label>
+                <Select value={newGender} onValueChange={(g: any) => setNewGender(g)}>
+                  <SelectTrigger className="text-foreground">
+                    <SelectValue placeholder="Select Gender" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="male">Male</SelectItem>
+                    <SelectItem value="female">Female</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <label className="text-sm font-medium text-foreground">Official Role</label>
+                <Select value={newRole} onValueChange={(v: any) => setNewRole(v)}>
+                  <SelectTrigger className="text-foreground">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="president">President</SelectItem>
+                    <SelectItem value="secretary">Secretary</SelectItem>
+                    <SelectItem value="promoter">Promoter</SelectItem>
+                    <SelectItem value="admin">Administrator</SelectItem>
+                    <SelectItem value="member">Staff/Member</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
+
             <div className="grid gap-2">
-              <label className="text-sm font-medium text-foreground">Official Role</label>
-              <Select value={newRole} onValueChange={(v: any) => setNewRole(v)}>
-                <SelectTrigger className="text-foreground">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="president">President</SelectItem>
-                  <SelectItem value="secretary">Secretary</SelectItem>
-                  <SelectItem value="promoter">Promoter</SelectItem>
-                  <SelectItem value="admin">Administrator</SelectItem>
-                  <SelectItem value="member">Staff/Member</SelectItem>
-                </SelectContent>
-              </Select>
+              <div className="flex justify-between items-center">
+                <label className="text-sm font-medium text-foreground">Date of Birth (Optional)</label>
+                {newDob && (
+                  <span className="text-[11px] font-bold text-primary">
+                    Age: {calculateAge(newDob)} yrs
+                  </span>
+                )}
+              </div>
+              <Input 
+                type="date" 
+                value={newDob} 
+                onChange={(e) => setNewDob(e.target.value)} 
+                className="text-foreground" 
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <label className="text-sm font-medium text-foreground">Phone Number (Optional)</label>
+              <Input placeholder="e.g. +91 9876543210" value={newPhone} onChange={(e) => setNewPhone(e.target.value)} className="text-foreground" />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <label className="text-sm font-medium text-foreground">Aadhar Number (Optional)</label>
+                <Input 
+                  placeholder="12-digit Aadhar" 
+                  value={newAadharNo} 
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/\D/g, '').substring(0, 12);
+                    setNewAadharNo(val);
+                  }} 
+                  className="text-foreground font-mono font-medium" 
+                />
+              </div>
+              <div className="grid gap-2">
+                <label className="text-sm font-medium text-foreground">PAN Number (Optional)</label>
+                <Input 
+                  placeholder="10-char PAN" 
+                  value={newPanNo} 
+                  onChange={(e) => setNewPanNo(e.target.value.toUpperCase().substring(0, 10))} 
+                  className="text-foreground font-mono uppercase font-medium" 
+                />
+              </div>
             </div>
           </div>
-          <DialogFooter>
+          
+          <DialogFooter className="p-6 pt-3 bg-muted/10 border-t">
             <Button variant="outline" onClick={() => setIsEditOpen(false)} className="text-foreground">Cancel</Button>
             <Button disabled={isSubmitting} onClick={handleEditMember}>
                {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Check className="w-4 h-4 mr-2" />}

@@ -28,6 +28,10 @@ export type Member = {
   role: 'admin' | 'member' | 'president' | 'secretary' | 'promoter';
   status: 'active' | 'inactive';
   gender?: 'male' | 'female' | 'other';
+  dob?: string;
+  aadharNo?: string;
+  panNo?: string;
+  phone?: string;
   joinedAt: number;
   shares: number; // Added this
   avatarUrl?: string; // Permanant avatar
@@ -128,6 +132,10 @@ export type OnboardingRecord = {
   email?: string;
   suggestedRole: Member['role'];
   gender?: 'male' | 'female' | 'other';
+  dob?: string;
+  aadharNo?: string;
+  panNo?: string;
+  phone?: string;
   notes?: string;
   createdAt: any;
   createdByName?: string;
