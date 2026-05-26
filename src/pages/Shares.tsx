@@ -7,7 +7,8 @@ import {
   TrendingUp,
   CircleDollarSign,
   Loader2,
-  CheckCircle2
+  CheckCircle2,
+  PiggyBank
 } from 'lucide-react';
 import { 
   PieChart, 
@@ -37,7 +38,7 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { collection, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, increment } from 'firebase/firestore';
 import { db, auth } from '@/lib/firebase';
-import { Member, ShareTransaction, AppSettings } from '@/types';
+import { Member, ShareTransaction, AppSettings, OnboardingRecord } from '@/types';
 import { handleFirestoreError, OperationType } from '@/lib/firestore-errors';
 import { toast } from 'sonner';
 import { 
@@ -54,10 +55,12 @@ const COLORS = ['#4f46e5', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'
 export function SharesPage() {
   const [members, setMembers] = React.useState<Member[]>([]);
   const [transactions, setTransactions] = React.useState<ShareTransaction[]>([]);
+  const [onboarding, setOnboarding] = React.useState<OnboardingRecord[]>([]);
   const [settings, setSettings] = React.useState<AppSettings | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [isUpdateOpen, setIsUpdateOpen] = React.useState(false);
   const [isPriceOpen, setIsPriceOpen] = React.useState(false);
+  const [isProjectedOpen, setIsProjectedOpen] = React.useState(false);
 
   // Form State
   const [selectedMemberId, setSelectedMemberId] = React.useState('');
@@ -86,10 +89,15 @@ export function SharesPage() {
       setLoading(false);
     }, (error) => handleFirestoreError(error, OperationType.GET, 'settings/global'));
 
+    const unsubOnboarding = onSnapshot(collection(db, 'onboarding'), (snapshot) => {
+      setOnboarding(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as OnboardingRecord)));
+    }, (error) => handleFirestoreError(error, OperationType.LIST, 'onboarding'));
+
     return () => {
       unsubMem();
       unsubTrans();
       unsubSettings();
+      unsubOnboarding();
     };
   }, []);
 
@@ -105,6 +113,8 @@ export function SharesPage() {
   const totalShares = members.reduce((sum, m) => sum + (m.shares || 0), 0);
   const sharePrice = settings?.sharePrice || 10;
   const marketCap = totalShares * sharePrice;
+  const totalOnboardingShares = onboarding.reduce((sum, item) => sum + (item.shares || 0), 0);
+  const expectedShareSale = totalOnboardingShares * sharePrice;
 
   const handleUpdatePrice = async () => {
     const price = parseFloat(newSharePrice);
@@ -196,7 +206,7 @@ export function SharesPage() {
           </div>
         </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
         <Card className="border-none shadow-md bg-card/50">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-widest">Total Issued</CardTitle>
@@ -221,30 +231,48 @@ export function SharesPage() {
           </CardContent>
         </Card>
 
-          <Card className="border-none shadow-md bg-card/50 text-foreground">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-widest">Share Price</CardTitle>
-            </CardHeader>
-            <CardContent>
-               <div className="flex items-center gap-3">
-                  <CircleDollarSign className="w-8 h-8 text-primary" />
-                  <p className="text-3xl font-black">₹{sharePrice.toLocaleString()} <span className="text-xs font-normal text-muted-foreground">/ Unit</span></p>
-               </div>
-            </CardContent>
-          </Card>
+        <Card 
+          onClick={() => setIsProjectedOpen(true)}
+          className="border-none shadow-md bg-card/50 text-foreground cursor-pointer transition-all duration-200 hover:scale-[1.02] hover:bg-card/75 active:scale-95"
+        >
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-widest">Expected Share Sale</CardTitle>
+          </CardHeader>
+          <CardContent>
+             <div className="flex items-center gap-3">
+                <PiggyBank className="w-8 h-8 text-indigo-500" />
+                <div>
+                   <p className="text-2xl font-black text-foreground">₹{expectedShareSale.toLocaleString()}</p>
+                   <p className="text-[10px] text-muted-foreground font-mono font-medium">{totalOnboardingShares} Shares in Queue</p>
+                </div>
+             </div>
+          </CardContent>
+        </Card>
 
-          <Card className="border-none shadow-md bg-card/50 text-foreground text-center sm:text-left">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-widest">Market Cap (Est)</CardTitle>
-            </CardHeader>
-            <CardContent>
-               <div className="flex items-center gap-3">
-                  <TrendingUp className="w-8 h-8 text-amber-500" />
-                  <p className="text-3xl font-black">₹{marketCap.toLocaleString()}</p>
-               </div>
-            </CardContent>
-          </Card>
-        </div>
+        <Card className="border-none shadow-md bg-card/50 text-foreground">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-widest">Share Price</CardTitle>
+          </CardHeader>
+          <CardContent>
+             <div className="flex items-center gap-3">
+                <CircleDollarSign className="w-8 h-8 text-primary" />
+                <p className="text-3xl font-black">₹{sharePrice.toLocaleString()} <span className="text-xs font-normal text-muted-foreground">/ Unit</span></p>
+             </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-none shadow-md bg-card/50 text-foreground text-center sm:text-left">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-widest">Market Cap (Est)</CardTitle>
+          </CardHeader>
+          <CardContent>
+             <div className="flex items-center gap-3">
+                <TrendingUp className="w-8 h-8 text-amber-500" />
+                <p className="text-3xl font-black">₹{marketCap.toLocaleString()}</p>
+             </div>
+          </CardContent>
+        </Card>
+      </div>
 
         <Card className="border-none shadow-md bg-card/50 text-foreground">
           <CardHeader>
@@ -485,6 +513,71 @@ export function SharesPage() {
                   Update Market Price
                </Button>
             </DialogFooter>
+         </DialogContent>
+      </Dialog>
+
+      <Dialog open={isProjectedOpen} onOpenChange={setIsProjectedOpen}>
+         <DialogContent className="sm:max-w-[500px] max-h-[85vh] flex flex-col p-0 overflow-hidden text-foreground">
+            <DialogHeader className="p-6 pb-4 border-b">
+               <DialogTitle className="flex items-center gap-2">
+                  <PiggyBank className="w-5 h-5 text-indigo-500 animate-pulse" />
+                  Projected Share Sales
+               </DialogTitle>
+               <DialogDescription>
+                  Upcoming investments from prospective shareholders currently listed in the boarding queue.
+               </DialogDescription>
+            </DialogHeader>
+
+            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+               <div className="p-4 rounded-xl bg-indigo-500/10 border border-indigo-500/20 grid grid-cols-2 gap-4">
+                  <div>
+                     <p className="text-[10px] text-indigo-300 font-semibold uppercase tracking-wider">Total Projected Shares</p>
+                     <p className="text-xl font-black text-indigo-400">
+                        {onboarding.reduce((sum, item) => sum + (item.shares || 0), 0)} Units
+                     </p>
+                  </div>
+                  <div>
+                     <p className="text-[10px] text-emerald-300 font-semibold uppercase tracking-wider">Expected Value</p>
+                     <p className="text-xl font-black text-emerald-400">
+                        ₹{(onboarding.reduce((sum, item) => sum + (item.shares || 0), 0) * sharePrice).toLocaleString()}
+                     </p>
+                  </div>
+               </div>
+
+               <div className="space-y-3">
+                  <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Boarding Queue ({onboarding.length})</p>
+                  <div className="space-y-2 max-h-[40vh] overflow-y-auto pr-1">
+                     {onboarding.length > 0 ? (
+                        onboarding.map((record) => {
+                           const recShares = record.shares || 0;
+                           return (
+                              <div key={record.id} className="p-3 rounded-lg bg-card/40 border border-border/40 flex items-center justify-between hover:bg-card/60 transition-colors">
+                                 <div className="flex items-center gap-3">
+                                    <div className="w-8 h-8 rounded-full bg-indigo-500/10 flex items-center justify-center font-bold text-xs text-indigo-400">
+                                       {record.name[0]}
+                                    </div>
+                                    <div>
+                                       <p className="text-sm font-bold text-foreground">{record.name}</p>
+                                       <p className="text-[10px] text-muted-foreground capitalize font-bold tracking-tight">
+                                          {record.suggestedRole} • {record.gender || 'unassigned'}
+                                       </p>
+                                    </div>
+                                 </div>
+                                 <div className="text-right">
+                                    <p className="text-sm font-black text-foreground">{recShares} Shares</p>
+                                    <p className="text-[10px] text-muted-foreground">₹{(recShares * sharePrice).toLocaleString()}</p>
+                                 </div>
+                              </div>
+                           );
+                        })
+                     ) : (
+                        <div className="text-center py-8 text-sm text-muted-foreground bg-muted/5 rounded-lg border border-dashed">
+                           No candidates in onboarding queue.
+                        </div>
+                     )}
+                  </div>
+               </div>
+            </div>
          </DialogContent>
       </Dialog>
     </div>

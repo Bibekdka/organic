@@ -94,6 +94,7 @@ service cloud.firestore {
              (!data.keys().hasAny(['notes']) || data.notes is string) &&
              (!data.keys().hasAny(['shares']) || data.shares is number) &&
              (!data.keys().hasAny(['status']) || data.status is string) &&
+             (!data.keys().hasAny(['createdBy']) || data.createdBy is string) &&
              (!data.keys().hasAny(['createdByDevice']) || data.createdByDevice is string) &&
              (!data.keys().hasAny(['createdByName']) || data.createdByName is string) &&
              (!data.keys().hasAny(['updatedByName']) || data.updatedByName is string) &&
@@ -148,7 +149,7 @@ service cloud.firestore {
     match /onboarding/{recordId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn() && isValidOnboarding(incoming());
-      allow update: if isSignedIn() && isValidOnboarding(incoming()) && (
+      allow update: if isSignedIn() && (
         incoming().diff(existing()).affectedKeys().hasOnly([
           'name', 'email', 'suggestedRole', 'gender', 'dob', 'aadharNo', 'panNo', 'phone', 'notes', 'shares', 'updatedByName', 'updatedByDevice', 'updatedAt'
         ])

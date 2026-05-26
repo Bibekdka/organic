@@ -56,6 +56,13 @@ import { handleFirestoreError, OperationType } from '@/lib/firestore-errors';
 import { cn, downloadPDFFile, calculateSettlements } from '@/lib/utils';
 import { getSpendingInsights } from '@/services/geminiService';
 import { AddExpenseDialog } from '@/components/AddExpenseDialog';
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogDescription 
+} from '@/components/ui/dialog';
 import { Plus } from 'lucide-react';
 import { useAuthStore } from '@/store/useAuthStore';
 import { motion, AnimatePresence } from 'motion/react';
@@ -68,12 +75,14 @@ export function Dashboard() {
     recentExpenses: [] as any[],
     allExpenses: [] as any[],
     members: [] as any[],
-    allIncomes: [] as any[]
+    allIncomes: [] as any[],
+    onboarding: [] as any[]
   });
   const [loading, setLoading] = React.useState(true);
   const [insights, setInsights] = React.useState<string[]>([]);
   const [loadingInsights, setLoadingInsights] = React.useState(false);
   const [isAddOpen, setIsAddOpen] = React.useState(false);
+  const [isProjectedOpen, setIsProjectedOpen] = React.useState(false);
 
   const [globalSettings, setGlobalSettings] = React.useState<any>(null);
   const [isBalancesCollapsed, setIsBalancesCollapsed] = React.useState(false);
@@ -221,10 +230,17 @@ export function Dashboard() {
       setStats(prev => ({ ...prev, allIncomes: incomes }));
     }, (err) => handleFirestoreError(err, OperationType.LIST, 'incomes'));
 
+    // Listen to Onboarding
+    const unsubOnboarding = onSnapshot(collection(db, 'onboarding'), (snapshot) => {
+      const onboarding = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setStats(prev => ({ ...prev, onboarding }));
+    }, (err) => handleFirestoreError(err, OperationType.LIST, 'onboarding'));
+
     return () => {
       unsubMembers();
       unsubExpenses();
       unsubIncomes();
+      unsubOnboarding();
     };
   }, [generateAIReview]);
 
@@ -476,6 +492,10 @@ export function Dashboard() {
     );
   }
 
+  const sharePrice = globalSettings?.sharePrice ?? 10;
+  const totalOnboardingShares = (stats.onboarding || []).reduce((sum, item) => sum + (parseFloat(item.shares) || 0), 0);
+  const expectedShareSaleValue = totalOnboardingShares * sharePrice;
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -521,33 +541,115 @@ export function Dashboard() {
 
       <AddExpenseDialog open={isAddOpen} onOpenChange={setIsAddOpen} />
 
+      <Dialog open={isProjectedOpen} onOpenChange={setIsProjectedOpen}>
+        <DialogContent className="sm:max-w-[500px] max-h-[85vh] flex flex-col p-0 overflow-hidden text-foreground">
+          <DialogHeader className="p-6 pb-4 border-b">
+            <DialogTitle className="flex items-center gap-2">
+              <PiggyBank className="w-5 h-5 text-indigo-500 animate-pulse" />
+              Projected Share Sales
+            </DialogTitle>
+            <DialogDescription>
+              A snapshot of upcoming share sales from candidate equity commitments in the boarding queue.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex-1 overflow-y-auto p-6 space-y-4">
+            {/* Summary card */}
+            <div className="p-4 rounded-xl bg-indigo-500/10 border border-indigo-500/20 grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-[10px] text-indigo-300 font-semibold uppercase tracking-wider">Total Projected Shares</p>
+                <p className="text-xl font-black text-indigo-400">
+                  {totalOnboardingShares} Units
+                </p>
+              </div>
+              <div>
+                <p className="text-[10px] text-emerald-300 font-semibold uppercase tracking-wider">Expected Sales Value</p>
+                <p className="text-xl font-black text-emerald-400">
+                  ₹{expectedShareSaleValue.toLocaleString()}
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Candidates In Queue ({stats.onboarding?.length || 0})</p>
+              <div className="space-y-2 max-h-[40vh] overflow-y-auto pr-1">
+                {stats.onboarding && stats.onboarding.length > 0 ? (
+                  stats.onboarding.map((record) => {
+                    const recShares = parseFloat(record.shares) || 0;
+                    return (
+                      <div key={record.id} className="p-3 rounded-lg bg-card/40 border border-border/40 flex items-center justify-between hover:bg-card/60 transition-colors">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-indigo-500/10 flex items-center justify-center font-bold text-xs text-indigo-400">
+                            {record.name[0]}
+                          </div>
+                          <div>
+                            <p className="text-sm font-bold text-foreground">{record.name}</p>
+                            <p className="text-[10px] text-muted-foreground capitalize font-bold tracking-tight">
+                              {record.suggestedRole} • {record.gender || 'unassigned'}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-black text-foreground">{recShares} Shares</p>
+                          <p className="text-[10px] text-muted-foreground">₹{(recShares * (globalSettings?.sharePrice ?? 10)).toLocaleString()}</p>
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="text-center py-8 text-sm text-muted-foreground bg-muted/5 rounded-lg border border-dashed">
+                     No candidates in onboarding queue.
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* TOP STAT CARDS: High-level overview of members, spending, and health scores */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard 
-          title="Active Members" 
-          value={stats.totalMembers.toString()} 
-          icon={<Users className="w-5 h-5" />} 
-          color="bg-primary/10 text-primary"
-        />
-        <StatCard 
-          title="Total Spent" 
-          value={`₹${(stats.totalSpent / 1000).toFixed(stats.totalSpent >= 1000 ? 1 : 2)}k`} 
-          icon={<Receipt className="w-5 h-5" />} 
-          color="bg-emerald-500/10 text-emerald-500"
-        />
-        <StatCard 
-          title="Liability Score" 
-          value={stats.totalSpent > 0 ? "8.4" : "0"} 
-          icon={<AlertCircle className="w-5 h-5" />} 
-          color="bg-amber-500/10 text-amber-500"
-        />
-        <StatCard 
-          title="Net Cashflow" 
-          value={stats.totalSpent > 0 ? "Positive" : "Stable"} 
-          icon={<TrendingUp className="w-5 h-5" />} 
-          color="bg-rose-500/10 text-rose-500"
-        />
-      </div>
+      {(() => {
+        const sharePrice = globalSettings?.sharePrice ?? 10;
+        const totalOnboardingShares = (stats.onboarding || []).reduce((sum, item) => sum + (parseFloat(item.shares) || 0), 0);
+        const expectedShareSale = totalOnboardingShares * sharePrice;
+        return (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+            <StatCard 
+              title="Active Members" 
+              value={stats.totalMembers.toString()} 
+              icon={<Users className="w-5 h-5" />} 
+              color="bg-primary/10 text-primary"
+            />
+            <StatCard 
+              title="Total Spent" 
+              value={`₹${(stats.totalSpent / 1000).toFixed(stats.totalSpent >= 1000 ? 1 : 2)}k`} 
+              icon={<Receipt className="w-5 h-5" />} 
+              color="bg-emerald-500/10 text-emerald-500"
+            />
+            <StatCard 
+              title="Expected Share Sale" 
+              value={`₹${expectedShareSale.toLocaleString()}`} 
+              icon={<PiggyBank className="w-5 h-5" />} 
+              color="bg-indigo-500/10 text-indigo-500 hover:bg-indigo-500/20"
+              trend={`${totalOnboardingShares} Shares in Queue`}
+              trendType="up"
+              onClick={() => setIsProjectedOpen(true)}
+            />
+            <StatCard 
+              title="Liability Score" 
+              value={stats.totalSpent > 0 ? "8.4" : "0"} 
+              icon={<AlertCircle className="w-5 h-5" />} 
+              color="bg-amber-500/10 text-amber-500"
+            />
+            <StatCard 
+              title="Net Cashflow" 
+              value={stats.totalSpent > 0 ? "Positive" : "Stable"} 
+              icon={<TrendingUp className="w-5 h-5" />} 
+              color="bg-rose-500/10 text-rose-500"
+            />
+          </div>
+        );
+      })()}
 
       {/* PERSISTENT MONTHLY BUDGET TARGET & CALENDAR DAY PLANNER */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -1235,9 +1337,15 @@ export function Dashboard() {
   );
 }
 
-function StatCard({ title, value, icon, trend, trendType, color }: any) {
+function StatCard({ title, value, icon, trend, trendType, color, onClick }: any) {
   return (
-    <Card className="border-none shadow-md relative overflow-hidden bg-white/5 backdrop-blur-sm">
+    <Card 
+      onClick={onClick}
+      className={cn(
+        "border-none shadow-md relative overflow-hidden bg-white/5 backdrop-blur-sm",
+        onClick && "cursor-pointer transition-all duration-200 hover:scale-[1.02] hover:bg-white/10 active:scale-95"
+      )}
+    >
       <CardContent className="p-6">
         <div className="flex items-center justify-between mb-4">
           <div className={cn("p-2 rounded-xl", color)}>

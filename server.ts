@@ -7,16 +7,25 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  // Initialize the Gemini client securely on the server-side
+  // Initialize the Gemini client securely on the server-side with safety checks
   const apiKey = process.env.GEMINI_API_KEY || "";
-  const ai = new GoogleGenAI({
-    apiKey: apiKey,
-    httpOptions: {
-      headers: {
-        'User-Agent': 'aistudio-build',
-      }
+  let ai: GoogleGenAI | null = null;
+  if (apiKey) {
+    try {
+      ai = new GoogleGenAI({
+        apiKey: apiKey,
+        httpOptions: {
+          headers: {
+            'User-Agent': 'aistudio-build',
+          }
+        }
+      });
+    } catch (e) {
+      console.error("Failed to initialize GoogleGenAI client:", e);
     }
-  });
+  } else {
+    console.warn("GEMINI_API_KEY is not configured. Running with high-fidelity dynamic heuristic insights fallback.");
+  }
 
   // Enable JSON request body parsing
   app.use(express.json());
@@ -111,7 +120,7 @@ async function startServer() {
       return res.status(400).json({ error: "Invalid expenses data. Must be an array." });
     }
 
-    if (!apiKey || useLocalFallback) {
+    if (!ai || !apiKey || useLocalFallback) {
       const heuristicInsights = generateHeuristicInsights(expenses);
       return res.json({
         insights: [
