@@ -62,6 +62,12 @@ export function SharesPage() {
   const [isPriceOpen, setIsPriceOpen] = React.useState(false);
   const [isProjectedOpen, setIsProjectedOpen] = React.useState(false);
 
+  // Buy & Sell Shares Form State
+  const [isBuySellOpen, setIsBuySellOpen] = React.useState(false);
+  const [buySellMemberId, setBuySellMemberId] = React.useState('');
+  const [buySellType, setBuySellType] = React.useState<'buy' | 'sell'>('buy');
+  const [buySellAmount, setBuySellAmount] = React.useState('');
+
   // Form State
   const [selectedMemberId, setSelectedMemberId] = React.useState('');
   const [changeType, setChangeType] = React.useState<'add' | 'remove'>('add');
@@ -181,6 +187,58 @@ export function SharesPage() {
     }
   };
 
+  const handleBuySellShares = async () => {
+    if (!buySellMemberId || !buySellAmount || parseFloat(buySellAmount) <= 0) return;
+    
+    setIsSubmitting(true);
+    const member = members.find(m => m.id === buySellMemberId);
+    if (!member) {
+      setIsSubmitting(false);
+      return;
+    }
+
+    const amount = parseFloat(buySellAmount);
+    const finalChange = buySellType === 'buy' ? amount : -amount;
+    const newTotal = (member.shares || 0) + finalChange;
+
+    if (newTotal < 0) {
+      toast.error("Member cannot have negative shares");
+      setIsSubmitting(false);
+      return;
+    }
+
+    try {
+      // 1. Update Member
+      await updateDoc(doc(db, 'members', buySellMemberId), {
+        shares: increment(finalChange)
+      });
+
+      // 2. Log Transaction
+      await addDoc(collection(db, 'share_transactions'), {
+        memberId: buySellMemberId,
+        memberName: member.name,
+        previousUnits: member.shares || 0,
+        newUnits: newTotal,
+        change: finalChange,
+        reason: buySellType === 'buy' ? 'Member Share Purchase' : 'Member Share Buyback',
+        createdAt: serverTimestamp(),
+        createdByName: auth.currentUser?.displayName || auth.currentUser?.email?.split('@')[0] || 'Unknown'
+      });
+
+      toast.success(
+        buySellType === 'buy'
+          ? `Successfully purchased ${amount} shares for ${member.name}`
+          : `Successfully completed buyback of ${amount} shares from ${member.name}`
+      );
+      setIsBuySellOpen(false);
+      setBuySellAmount('');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `members/${buySellMemberId}`);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="h-[60vh] flex items-center justify-center">
@@ -196,9 +254,12 @@ export function SharesPage() {
             <h2 className="text-2xl font-bold tracking-tight text-foreground">Shares Management</h2>
             <p className="text-muted-foreground text-sm">Equity distribution and capital history.</p>
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => setIsPriceOpen(true)} className="gap-2 text-foreground">
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => { setNewSharePrice(sharePrice.toString()); setIsPriceOpen(true); }} className="gap-2 text-foreground">
               <CircleDollarSign className="w-4 h-4" /> Set Share Price
+            </Button>
+            <Button variant="outline" onClick={() => { setBuySellMemberId(''); setBuySellType('buy'); setBuySellAmount(''); setIsBuySellOpen(true); }} className="gap-2 text-foreground">
+              <ArrowRightLeft className="w-4 h-4" /> Buy / Sell Shares
             </Button>
             <Button onClick={() => setIsUpdateOpen(true)} className="gap-2 shadow-lg shadow-primary/20">
               <ArrowRightLeft className="w-4 h-4" /> Issue/Transfer Shares
@@ -289,6 +350,7 @@ export function SharesPage() {
                     <TableHead className="text-right">Shares</TableHead>
                     <TableHead className="text-right">Ownership</TableHead>
                     <TableHead className="text-right">Value (₹)</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -302,6 +364,21 @@ export function SharesPage() {
                       <TableCell className="text-right font-black text-emerald-600">
                         ₹{(m.shares * sharePrice).toLocaleString()}
                       </TableCell>
+                      <TableCell className="text-right">
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => {
+                            setBuySellMemberId(m.id);
+                            setBuySellType('buy');
+                            setBuySellAmount('');
+                            setIsBuySellOpen(true);
+                          }}
+                          className="h-7 px-3 text-[10px] text-foreground font-semibold"
+                        >
+                          Buy / Sell
+                        </Button>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -311,14 +388,31 @@ export function SharesPage() {
             {/* Mobile View Cards */}
             <div className="md:hidden divide-y divide-border/20">
               {members.filter(m => m.shares > 0).map(m => (
-                <div key={m.id} className="p-4 flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-bold text-foreground">{m.name}</p>
-                    <p className="text-[10px] text-muted-foreground uppercase">{m.shares} Units • {((m.shares / totalShares) * 100).toFixed(1)}%</p>
+                <div key={m.id} className="p-4 flex flex-col gap-2">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-bold text-foreground">{m.name}</p>
+                      <p className="text-[10px] text-muted-foreground uppercase">{m.shares} Units • {((m.shares / totalShares) * 100).toFixed(1)}%</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-black text-emerald-600">₹{(m.shares * sharePrice).toLocaleString()}</p>
+                      <p className="text-[9px] text-muted-foreground uppercase font-black tracking-widest">Equity Value</p>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-sm font-black text-emerald-600">₹{(m.shares * sharePrice).toLocaleString()}</p>
-                    <p className="text-[9px] text-muted-foreground uppercase font-black tracking-widest">Equity Value</p>
+                  <div className="flex justify-end pr-1">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => {
+                        setBuySellMemberId(m.id);
+                        setBuySellType('buy');
+                        setBuySellAmount('');
+                        setIsBuySellOpen(true);
+                      }}
+                      className="h-7 px-3 text-[10px] text-foreground font-semibold"
+                    >
+                      Buy / Sell Shares
+                    </Button>
                   </div>
                 </div>
               ))}
@@ -511,6 +605,106 @@ export function SharesPage() {
                <Button disabled={isSubmitting} onClick={handleUpdatePrice}>
                   {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <CheckCircle2 className="w-4 h-4 mr-2" />}
                   Update Market Price
+               </Button>
+            </DialogFooter>
+         </DialogContent>
+      </Dialog>
+
+      <Dialog open={isBuySellOpen} onOpenChange={setIsBuySellOpen}>
+         <DialogContent className="sm:max-w-[425px] text-foreground">
+            <DialogHeader>
+               <DialogTitle className="flex items-center gap-2">
+                  <ArrowRightLeft className="w-5 h-5 text-indigo-500" />
+                  Buy / Sell Shares
+               </DialogTitle>
+               <DialogDescription>
+                  Existing customers or members can purchase additional shares or request corporate share buybacks.
+               </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+               <div className="grid gap-2">
+                  <label className="text-sm font-medium">Select Member</label>
+                  <Select value={buySellMemberId} onValueChange={setBuySellMemberId}>
+                     <SelectTrigger className="text-foreground">
+                        <SelectValue placeholder="Choose an existing member..." />
+                     </SelectTrigger>
+                     <SelectContent>
+                        {members.map(m => (
+                           <SelectItem key={m.id} value={m.id}>
+                              {m.name} ({m.shares || 0} shares)
+                           </SelectItem>
+                        ))}
+                     </SelectContent>
+                  </Select>
+               </div>
+
+               {(() => {
+                  const selectedMember = members.find(m => m.id === buySellMemberId);
+                  if (!selectedMember) return null;
+                  return (
+                     <div className="p-3 rounded-lg bg-muted/20 border border-border/50 text-xs space-y-1">
+                        <p className="font-bold text-muted-foreground uppercase text-[10px] tracking-wider">Current Holdings</p>
+                        <div className="flex justify-between font-medium">
+                           <span>Shares Owned:</span>
+                           <span className="font-bold">{selectedMember.shares || 0} Units</span>
+                        </div>
+                        <div className="flex justify-between font-medium">
+                           <span>Equity Value:</span>
+                           <span className="font-bold text-emerald-500">₹{((selectedMember.shares || 0) * sharePrice).toLocaleString()}</span>
+                        </div>
+                     </div>
+                  );
+               })()}
+
+               <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                     <label className="text-sm font-medium">Transaction Type</label>
+                     <Select value={buySellType} onValueChange={(v: 'buy' | 'sell') => setBuySellType(v)}>
+                        <SelectTrigger className="text-foreground">
+                           <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                           <SelectItem value="buy">Buy (Purchase)</SelectItem>
+                           <SelectItem value="sell">Sell (Buyback)</SelectItem>
+                        </SelectContent>
+                     </Select>
+                  </div>
+                  <div className="grid gap-2">
+                     <label className="text-sm font-medium">Units of Shares</label>
+                     <Input 
+                        type="number" 
+                        placeholder="0" 
+                        value={buySellAmount} 
+                        onChange={(e) => setBuySellAmount(e.target.value)}
+                        className="text-foreground"
+                     />
+                  </div>
+               </div>
+
+               {buySellAmount && parseFloat(buySellAmount) > 0 && (
+                  <div className="p-3 rounded-lg bg-primary/5 border border-primary/15 text-xs">
+                     <p className="font-bold text-[10px] uppercase text-indigo-500 tracking-wider mb-1">Financial Settlement Details</p>
+                     <div className="flex justify-between">
+                        <span>Unit Amount:</span>
+                        <span>{parseFloat(buySellAmount)} Units @ ₹{sharePrice}/sh</span>
+                     </div>
+                     <div className="flex justify-between mt-1 pt-1 border-t border-primary/10 text-sm font-black text-foreground">
+                        <span>{buySellType === 'buy' ? 'Total Cost (Payable):' : 'Expected Payout (Refund):'}</span>
+                        <span className={buySellType === 'buy' ? 'text-indigo-400' : 'text-emerald-400'}>
+                           ₹{(parseFloat(buySellAmount) * sharePrice).toLocaleString()}
+                        </span>
+                     </div>
+                  </div>
+               )}
+            </div>
+            <DialogFooter>
+               <Button variant="outline" onClick={() => setIsBuySellOpen(false)} className="text-foreground">Cancel</Button>
+               <Button 
+                  disabled={isSubmitting || !buySellMemberId || !buySellAmount || parseFloat(buySellAmount) <= 0} 
+                  onClick={handleBuySellShares}
+               >
+                  {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <CheckCircle2 className="w-4 h-4 mr-2" />}
+                  Confirm Transaction
                </Button>
             </DialogFooter>
          </DialogContent>
