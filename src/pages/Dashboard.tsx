@@ -66,9 +66,11 @@ import {
 import { Plus } from 'lucide-react';
 import { useAuthStore } from '@/store/useAuthStore';
 import { motion, AnimatePresence } from 'motion/react';
+import { toast } from 'sonner';
 
 export function Dashboard() {
   const { user } = useAuthStore();
+  const isAdmin = user?.email === 'bibekdeka97@gmail.com';
   const [stats, setStats] = React.useState({
     totalMembers: 0,
     totalSpent: 0,
@@ -132,6 +134,10 @@ export function Dashboard() {
   }, []);
 
   const handleSaveTarget = async () => {
+    if (!isAdmin) {
+      toast.error("Permission Denied: Only bibekdeka97@gmail.com can set the monthly target.");
+      return;
+    }
     const parsed = parseFloat(targetInputVal);
     if (!isNaN(parsed) && parsed >= 0) {
       try {
@@ -668,7 +674,7 @@ export function Dashboard() {
                            variant="ghost" 
                            size="icon" 
                            onClick={() => setIsEditingTarget(true)} 
-                           className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                           className={cn("h-8 w-8 text-muted-foreground hover:text-foreground", !isAdmin && "hidden")}
                            title="Change Monthly Budget Limit"
                         >
                            <Edit2 className="w-4 h-4 text-primary" />

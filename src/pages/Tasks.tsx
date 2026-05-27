@@ -26,7 +26,7 @@ import {
 import { db } from '@/lib/firebase';
 import { Task, TaskStatus, TaskPriority, Member } from '@/types';
 import { handleFirestoreError, OperationType } from '@/lib/firestore-errors';
-import { getUserAttribution } from '@/lib/utils';
+import { cn, getUserAttribution } from '@/lib/utils';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -60,6 +60,7 @@ import {
   DropdownMenuSeparator
 } from '@/components/ui/dropdown-menu';
 import { motion, AnimatePresence } from 'motion/react';
+import { useAuthStore } from '@/store/useAuthStore';
 import { 
   DndContext, 
   closestCenter, 
@@ -109,6 +110,8 @@ interface StickyNoteProps {
 }
 
 function StickyNote({ task, assignee, onDelete, onEdit, onUpdateStatus }: StickyNoteProps) {
+  const { user } = useAuthStore();
+  const isAdmin = user?.email === 'bibekdeka97@gmail.com';
   const {
     attributes,
     listeners,
@@ -147,7 +150,7 @@ function StickyNote({ task, assignee, onDelete, onEdit, onUpdateStatus }: Sticky
           <div 
             {...attributes} 
             {...listeners} 
-            className="cursor-grab active:cursor-grabbing p-2.5 -ml-2 -mt-2 rounded-md text-current/30 hover:text-current/60 hover:bg-current/5 transition-colors"
+            className={cn("cursor-grab active:cursor-grabbing p-2.5 -ml-2 -mt-2 rounded-md text-current/30 hover:text-current/60 hover:bg-current/5 transition-colors", !isAdmin && "hidden")}
             title="Drag to move"
           >
             <GripVertical className="w-4 h-4" />
@@ -163,13 +166,13 @@ function StickyNote({ task, assignee, onDelete, onEdit, onUpdateStatus }: Sticky
               }} 
               variant="ghost" 
               size="icon" 
-              className="w-7 h-7 text-current/40 hover:text-current/70 hover:bg-current/5"
+              className={cn("w-7 h-7 text-current/40 hover:text-current/70 hover:bg-current/5", !isAdmin && "hidden")}
             >
               <Pencil className="w-3.5 h-3.5" />
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger render={
-                <Button variant="ghost" size="icon" className="w-7 h-7 -mr-2 text-current/40 hover:text-current/70 hover:bg-current/5">
+                <Button variant="ghost" size="icon" className={cn("w-7 h-7 -mr-2 text-current/40 hover:text-current/70 hover:bg-current/5", !isAdmin && "hidden")}>
                   <MoreVertical className="w-3.5 h-3.5" />
                 </Button>
               } />
@@ -231,6 +234,8 @@ function StickyNote({ task, assignee, onDelete, onEdit, onUpdateStatus }: Sticky
 }
 
 export function TasksPage() {
+  const { user } = useAuthStore();
+  const isAdmin = user?.email === 'bibekdeka97@gmail.com';
   const [tasks, setTasks] = React.useState<Task[]>([]);
   const [members, setMembers] = React.useState<Member[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -274,6 +279,10 @@ export function TasksPage() {
   }, []);
 
   const handleAddTask = async () => {
+    if (!isAdmin) {
+      toast.error("Permission Denied: Only bibekdeka97@gmail.com can perform this action");
+      return;
+    }
     if (!newTitle) return;
     setIsSubmitting(true);
     const attr = getUserAttribution();
@@ -313,6 +322,10 @@ export function TasksPage() {
   };
 
   const handleUpdateTask = async () => {
+    if (!isAdmin) {
+      toast.error("Permission Denied: Only bibekdeka97@gmail.com can perform this action");
+      return;
+    }
     if (!taskToEdit || !editTitle) return;
     setIsSubmitting(true);
     const attr = getUserAttribution();
@@ -337,6 +350,10 @@ export function TasksPage() {
   };
 
   const updateTaskStatus = async (taskId: string, newStatus: TaskStatus) => {
+    if (!isAdmin) {
+      toast.error("Permission Denied: Only bibekdeka97@gmail.com can perform this action");
+      return;
+    }
     const attr = getUserAttribution();
     try {
       await updateDoc(doc(db, 'tasks', taskId), { 
@@ -351,6 +368,10 @@ export function TasksPage() {
   };
 
   const deleteTask = async () => {
+    if (!isAdmin) {
+      toast.error("Permission Denied: Only bibekdeka97@gmail.com can perform this action");
+      return;
+    }
     if (!taskToDelete) return;
     try {
       await deleteDoc(doc(db, 'tasks', taskToDelete));
@@ -362,6 +383,10 @@ export function TasksPage() {
   };
 
   const handleDragEnd = async (event: any) => {
+    if (!isAdmin) {
+      toast.error("Permission Denied: Only bibekdeka97@gmail.com can transition tasks");
+      return;
+    }
     const { active, over } = event;
     setActiveId(null);
 
@@ -412,7 +437,7 @@ export function TasksPage() {
            <Button variant="outline" className="gap-2 bg-card border-none shadow-sm text-foreground">
              <Filter className="w-4 h-4" /> Filter
            </Button>
-           <Button onClick={() => setIsAddOpen(true)} className="gap-2 shadow-lg shadow-amber-200 bg-amber-400 hover:bg-amber-500 text-amber-950 font-black border-b-4 border-amber-600 active:border-b-0 active:translate-y-1 transition-all">
+           <Button disabled={!isAdmin} onClick={() => setIsAddOpen(true)} className={cn("gap-2 shadow-lg shadow-amber-200 bg-amber-400 hover:bg-amber-500 text-amber-950 font-black border-b-4 border-amber-600 active:border-b-0 active:translate-y-1 transition-all disabled:opacity-50 disabled:pointer-events-none")}>
              <Plus className="w-4 h-4" /> Stick Note
            </Button>
         </div>

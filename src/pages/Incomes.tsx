@@ -23,7 +23,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Income } from '@/types';
-import { getUserAttribution } from '@/lib/utils';
+import { cn, getUserAttribution } from '@/lib/utils';
 import { handleFirestoreError, OperationType } from '@/lib/firestore-errors';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -69,6 +69,7 @@ export function IncomesPage() {
   const [searchTerm, setSearchTerm] = React.useState('');
   const [isAddOpen, setIsAddOpen] = React.useState(false);
   const user = useAuthStore(state => state.user);
+  const isAdmin = user?.email === 'bibekdeka97@gmail.com';
 
   // Form state
   const [source, setSource] = React.useState('');
@@ -89,6 +90,10 @@ export function IncomesPage() {
   }, []);
 
   const handleAddIncome = async () => {
+    if (!isAdmin) {
+      toast.error("Permission Denied: Only bibekdeka97@gmail.com can perform this action");
+      return;
+    }
     if (!source || !amount || !user) return;
     setIsSubmitting(true);
     const attr = getUserAttribution();
@@ -123,6 +128,10 @@ export function IncomesPage() {
   };
 
   const deleteIncome = async (id: string) => {
+    if (!isAdmin) {
+      toast.error("Permission Denied: Only bibekdeka97@gmail.com can perform this action");
+      return;
+    }
     if (!window.confirm('Delete this record?')) return;
     try {
       await deleteDoc(doc(db, 'incomes', id));
@@ -153,7 +162,7 @@ export function IncomesPage() {
           <Button variant="outline" className="gap-2 bg-card border-none shadow-sm text-foreground">
             <Download className="w-4 h-4" /> Export
           </Button>
-          <Button onClick={() => setIsAddOpen(true)} className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-200">
+          <Button disabled={!isAdmin} onClick={() => setIsAddOpen(true)} className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-200 disabled:opacity-50">
             <Plus className="w-4 h-4" /> Add Income
           </Button>
         </div>
@@ -266,7 +275,7 @@ export function IncomesPage() {
                   <TableCell className="text-right p-4">
                     <DropdownMenu>
                       <DropdownMenuTrigger render={
-                        <Button variant="ghost" size="icon" className="w-8 h-8 text-muted-foreground hover:text-rose-500">
+                        <Button variant="ghost" size="icon" className={cn("w-8 h-8 text-muted-foreground hover:text-rose-500", !isAdmin && "hidden")}>
                           <MoreVertical className="w-4 h-4" />
                         </Button>
                       } />
@@ -312,7 +321,7 @@ export function IncomesPage() {
                 </div>
                 <div className="text-right">
                   <p className="text-sm font-black text-emerald-600">₹{income.amount.toLocaleString()}</p>
-                  <Button onClick={() => deleteIncome(income.id)} variant="ghost" size="icon" className="h-8 w-8 text-rose-500 mt-1">
+                  <Button onClick={() => deleteIncome(income.id)} variant="ghost" size="icon" className={cn("h-8 w-8 text-rose-500 mt-1", !isAdmin && "hidden")}>
                     <Trash2 className="w-3.5 h-3.5" />
                   </Button>
                 </div>

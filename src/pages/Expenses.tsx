@@ -53,13 +53,14 @@ import { AddExpenseDialog } from '@/components/AddExpenseDialog';
 
 import { collection, query, onSnapshot, orderBy, deleteDoc, doc, addDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { getUserAttribution, downloadPDFFile, calculateSettlements } from '@/lib/utils';
+import { cn, getUserAttribution, downloadPDFFile, calculateSettlements } from '@/lib/utils';
 import { handleFirestoreError, OperationType } from '@/lib/firestore-errors';
 import { toast } from 'sonner';
 import { useAuthStore } from '@/store/useAuthStore';
 
 export function ExpensesPage() {
   const { user } = useAuthStore();
+  const isAdmin = user?.email === 'bibekdeka97@gmail.com';
   // UI State: Controls dialog visibility and tab selection
   const [isAddOpen, setIsAddOpen] = React.useState(false);
   const [expenseToEdit, setExpenseToEdit] = React.useState<any>(null);
@@ -251,6 +252,10 @@ export function ExpensesPage() {
    * Triggered by the dustbin icon. Removes the record from Firestore.
    */
   const deleteExpense = async () => {
+    if (!isAdmin) {
+      toast.error("Permission Denied: Only bibekdeka97@gmail.com can perform this action");
+      return;
+    }
     if (!expenseToDelete) return;
     try {
       await deleteDoc(doc(db, 'expenses', expenseToDelete));
@@ -266,18 +271,30 @@ export function ExpensesPage() {
    * Fills the dialog state with data from the selected record.
    */
   const handleEditExpense = (expense: any) => {
+    if (!isAdmin) {
+      toast.error("Permission Denied: Only bibekdeka97@gmail.com can perform this action");
+      return;
+    }
     setTemplateToEdit(null);
     setExpenseToEdit(expense);
     setIsAddOpen(true);
   };
 
   const handleEditTemplate = (template: any) => {
+    if (!isAdmin) {
+      toast.error("Permission Denied: Only bibekdeka97@gmail.com can perform this action");
+      return;
+    }
     setExpenseToEdit(null);
     setTemplateToEdit(template);
     setIsAddOpen(true);
   };
 
   const openAddDialog = () => {
+    if (!isAdmin) {
+      toast.error("Permission Denied: Only bibekdeka97@gmail.com can perform this action");
+      return;
+    }
     setExpenseToEdit(null);
     setTemplateToEdit(null);
     setIsAddOpen(true);
@@ -287,6 +304,10 @@ export function ExpensesPage() {
    * Action: Delete a recurring template
    */
   const deleteTemplate = async () => {
+    if (!isAdmin) {
+      toast.error("Permission Denied: Only bibekdeka97@gmail.com can perform this action");
+      return;
+    }
     if (!templateToDelete) return;
     try {
       await deleteDoc(doc(db, 'recurring_templates', templateToDelete));
@@ -302,6 +323,10 @@ export function ExpensesPage() {
    * Manually triggers a template to log an expense immediately and updates the next scheduled date.
    */
   const runRecurringTemplate = async (template: any) => {
+    if (!isAdmin) {
+      toast.error("Permission Denied: Only bibekdeka97@gmail.com can perform this action");
+      return;
+    }
     const attr = getUserAttribution();
     try {
       // eslint-disable-next-line no-unused-vars
@@ -381,7 +406,7 @@ export function ExpensesPage() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <Button onClick={openAddDialog} className="gap-2 shadow-lg shadow-primary/20 w-full sm:w-auto">
+          <Button disabled={!isAdmin} onClick={openAddDialog} className="gap-2 shadow-lg shadow-primary/20 w-full sm:w-auto disabled:opacity-50">
             <Plus className="w-4 h-4" /> Log Expense
           </Button>
         </div>
@@ -501,7 +526,7 @@ export function ExpensesPage() {
                     <TableHead>Owner</TableHead>
                     <TableHead>Split</TableHead>
                     <TableHead>Category</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    {isAdmin && <TableHead className="text-right">Actions</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -545,7 +570,7 @@ export function ExpensesPage() {
                       <TableCell>
                         <span className="text-xs px-2 py-1 bg-secondary/50 rounded-md text-foreground">{expense.category}</span>
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className={cn("text-right", !isAdmin && "hidden")}>
                         <div className="flex items-center justify-end gap-1">
                           <Button 
                             onClick={() => handleEditExpense(expense)} 
@@ -615,10 +640,10 @@ export function ExpensesPage() {
                        <span className="text-[9px] font-black text-foreground">By {expense.updatedByName || expense.createdByName}</span>
                     </div>
                     <div className="flex items-center gap-1">
-                      <Button onClick={() => handleEditExpense(expense)} variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground">
+                      <Button onClick={() => handleEditExpense(expense)} variant="ghost" size="icon" className={cn("h-8 w-8 text-muted-foreground", !isAdmin && "hidden")}>
                         <Pencil className="w-3.5 h-3.5" />
                       </Button>
-                      <Button onClick={() => setExpenseToDelete(expense.id)} variant="ghost" size="icon" className="h-8 w-8 text-rose-500 hover:bg-rose-500/10">
+                      <Button onClick={() => setExpenseToDelete(expense.id)} variant="ghost" size="icon" className={cn("h-8 w-8 text-rose-500 hover:bg-rose-500/10", !isAdmin && "hidden")}>
                         <Trash2 className="w-3.5 h-3.5" />
                       </Button>
                     </div>
@@ -645,7 +670,7 @@ export function ExpensesPage() {
                     <TableHead>Frequency</TableHead>
                     <TableHead>Next Due</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    {isAdmin && <TableHead className="text-right">Actions</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -662,7 +687,7 @@ export function ExpensesPage() {
                           {template.active ? 'Active' : 'Paused'}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className={cn("text-right", !isAdmin && "hidden")}>
                         <div className="flex items-center justify-end gap-1">
                           <Button 
                             onClick={() => handleEditTemplate(template)}
@@ -730,10 +755,10 @@ export function ExpensesPage() {
                       <Button onClick={() => runRecurringTemplate(template)} variant="ghost" size="sm" className="h-7 text-primary text-[10px] px-2 font-bold uppercase transition-all active:scale-95">
                         Run
                       </Button>
-                      <Button onClick={() => handleEditTemplate(template)} variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground">
+                      <Button onClick={() => handleEditTemplate(template)} variant="ghost" size="icon" className={cn("h-8 w-8 text-muted-foreground", !isAdmin && "hidden")}>
                         <Pencil className="w-3 h-3" />
                       </Button>
-                      <Button onClick={() => setTemplateToDelete(template.id)} variant="ghost" size="icon" className="h-8 w-8 text-rose-500">
+                      <Button onClick={() => setTemplateToDelete(template.id)} variant="ghost" size="icon" className={cn("h-8 w-8 text-rose-500", !isAdmin && "hidden")}>
                         <Trash2 className="w-3 h-3" />
                       </Button>
                     </div>

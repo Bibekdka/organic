@@ -56,8 +56,12 @@ import { Member, Expense, OnboardingRecord } from '@/types';
 import { toast } from 'sonner';
 import { cn, getUserAttribution } from '@/lib/utils';
 import { handleFirestoreError, OperationType } from '@/lib/firestore-errors';
+import { useAuthStore } from '@/store/useAuthStore';
 
 export function MembersPage() {
+  const user = useAuthStore(state => state.user);
+  const isAdmin = user?.email === 'bibekdeka97@gmail.com';
+
   const [searchTerm, setSearchTerm] = React.useState('');
   const [categoryFilter, setCategoryFilter] = React.useState('all');
   const [members, setMembers] = React.useState<Member[]>([]);
@@ -154,6 +158,10 @@ export function MembersPage() {
   };
 
   const handleAddMember = async () => {
+    if (!isAdmin) {
+      toast.error("Permission Denied: Only bibekdeka97@gmail.com can perform this action");
+      return;
+    }
     if (!newName) return;
     setIsSubmitting(true);
     try {
@@ -187,6 +195,10 @@ export function MembersPage() {
   };
 
   const handleAddOnboarding = async () => {
+    if (!isAdmin) {
+      toast.error("Permission Denied: Only bibekdeka97@gmail.com can perform this action");
+      return;
+    }
     if (!newName) return;
     setIsSubmitting(true);
     try {
@@ -218,6 +230,10 @@ export function MembersPage() {
   };
 
   const joinTeam = async (record: OnboardingRecord) => {
+    if (!isAdmin) {
+      toast.error("Permission Denied: Only bibekdeka97@gmail.com can perform this action");
+      return;
+    }
     setIsSubmitting(true);
     try {
       const attr = getUserAttribution();
@@ -252,6 +268,10 @@ export function MembersPage() {
   };
 
   const deleteOnboarding = async (id: string) => {
+    if (!isAdmin) {
+      toast.error("Permission Denied: Only bibekdeka97@gmail.com can perform this action");
+      return;
+    }
     try {
       await deleteDoc(doc(db, 'onboarding', id));
       toast.success('Removed from queue');
@@ -261,6 +281,10 @@ export function MembersPage() {
   };
 
   const handleEditMember = async () => {
+    if (!isAdmin) {
+      toast.error("Permission Denied: Only bibekdeka97@gmail.com can perform this action");
+      return;
+    }
     if (!editingMember || !newName) return;
     setIsSubmitting(true);
     const attr = getUserAttribution();
@@ -319,6 +343,10 @@ export function MembersPage() {
   };
 
   const handleEditOnboarding = async () => {
+    if (!isAdmin) {
+      toast.error("Permission Denied: Only bibekdeka97@gmail.com can perform this action");
+      return;
+    }
     if (!editingOnboarding || !newName) return;
     setIsSubmitting(true);
     const attr = getUserAttribution();
@@ -365,6 +393,10 @@ export function MembersPage() {
   };
 
   const updateMemberRole = async (member: Member, role: Member['role']) => {
+    if (!isAdmin) {
+      toast.error("Permission Denied: Only bibekdeka97@gmail.com can perform this action");
+      return;
+    }
     const attr = getUserAttribution();
     try {
       await updateDoc(doc(db, 'members', member.id), { 
@@ -380,6 +412,10 @@ export function MembersPage() {
   };
 
   const toggleStatus = async (member: Member) => {
+    if (!isAdmin) {
+      toast.error("Permission Denied: Only bibekdeka97@gmail.com can perform this action");
+      return;
+    }
     const newStatus = member.status === 'active' ? 'inactive' : 'active';
     const attr = getUserAttribution();
     try {
@@ -396,6 +432,10 @@ export function MembersPage() {
   };
 
   const deleteMember = async (id: string) => {
+    if (!isAdmin) {
+      toast.error("Permission Denied: Only bibekdeka97@gmail.com can perform this action");
+      return;
+    }
     console.log('Attempting to delete member with ID:', id);
     try {
       await deleteDoc(doc(db, 'members', id));
@@ -522,10 +562,19 @@ export function MembersPage() {
           <p className="text-muted-foreground text-sm">Manage roles, contributions and profiles of members.</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setIsOnboardingAddOpen(true)} className="gap-2 border-primary/20 hover:bg-primary/5 text-primary">
+          <Button 
+            disabled={!isAdmin} 
+            variant="outline" 
+            onClick={() => setIsOnboardingAddOpen(true)} 
+            className="gap-2 border-primary/20 hover:bg-primary/5 text-primary disabled:opacity-50"
+          >
             <UserPlus className="w-4 h-4" /> Queue for Onboarding
           </Button>
-          <Button onClick={() => setIsAddOpen(true)} className="gap-2 shadow-lg shadow-primary/20">
+          <Button 
+            disabled={!isAdmin} 
+            onClick={() => setIsAddOpen(true)} 
+            className="gap-2 shadow-lg shadow-primary/20 disabled:opacity-50"
+          >
             <Check className="w-4 h-4" /> Direct Add
           </Button>
         </div>
@@ -739,10 +788,11 @@ export function MembersPage() {
                       </TableCell>
                       <TableCell>
                         <Badge 
-                          onClick={() => toggleStatus(member)}
+                          onClick={() => isAdmin && toggleStatus(member)}
                           variant={member.status === 'active' ? 'default' : 'secondary'} 
                           className={cn(
-                            "rounded-full px-2 py-0 h-5 text-[10px] font-bold uppercase tracking-wider bg-transparent border cursor-pointer hover:bg-muted/30 transition-all active:scale-95",
+                            "rounded-full px-2 py-0 h-5 text-[10px] font-bold uppercase tracking-wider bg-transparent border transition-all active:scale-95",
+                            isAdmin ? "cursor-pointer hover:bg-muted/30" : "cursor-not-allowed opacity-80",
                             member.status === 'active' ? "border-emerald-500/30 text-emerald-500" : "border-rose-500/30 text-rose-500"
                           )}
                         >
@@ -775,32 +825,37 @@ export function MembersPage() {
                             <DropdownMenuItem onClick={() => viewProfile(member)} className="gap-2 text-xs py-2 cursor-pointer">
                                <FileText className="w-3.5 h-3.5" /> View Member Profile
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => openEditDialog(member)} className="gap-2 text-xs py-2 cursor-pointer">
-                               <Pencil className="w-3.5 h-3.5" /> Edit Details
-                            </DropdownMenuItem>
                             
-                            <DropdownMenuSub>
-                              <DropdownMenuSubTrigger className="gap-2 text-xs py-2">
-                                <Tag className="w-3.5 h-3.5" /> Set Role
-                              </DropdownMenuSubTrigger>
-                              <DropdownMenuSubContent className="w-48 text-foreground">
-                                  <DropdownMenuRadioGroup value={member.role} onValueChange={(r) => updateMemberRole(member, r as any)}>
-                                  <DropdownMenuRadioItem value="president" className="text-xs font-bold">President</DropdownMenuRadioItem>
-                                  <DropdownMenuRadioItem value="secretary" className="text-xs font-bold">Secretary</DropdownMenuRadioItem>
-                                  <DropdownMenuRadioItem value="promoter" className="text-xs font-bold">Promoter / Founder</DropdownMenuRadioItem>
-                                  <DropdownMenuRadioItem value="admin" className="text-xs font-bold">Administrator</DropdownMenuRadioItem>
-                                  <DropdownMenuRadioItem value="member" className="text-xs font-bold">General Member</DropdownMenuRadioItem>
-                                </DropdownMenuRadioGroup>
-                              </DropdownMenuSubContent>
-                            </DropdownMenuSub>
+                            {isAdmin && (
+                              <>
+                                <DropdownMenuItem onClick={() => openEditDialog(member)} className="gap-2 text-xs py-2 cursor-pointer">
+                                   <Pencil className="w-3.5 h-3.5" /> Edit Details
+                                </DropdownMenuItem>
+                                
+                                <DropdownMenuSub>
+                                  <DropdownMenuSubTrigger className="gap-2 text-xs py-2">
+                                    <Tag className="w-3.5 h-3.5" /> Set Role
+                                  </DropdownMenuSubTrigger>
+                                  <DropdownMenuSubContent className="w-48 text-foreground">
+                                      <DropdownMenuRadioGroup value={member.role} onValueChange={(r) => updateMemberRole(member, r as any)}>
+                                      <DropdownMenuRadioItem value="president" className="text-xs font-bold">President</DropdownMenuRadioItem>
+                                      <DropdownMenuRadioItem value="secretary" className="text-xs font-bold">Secretary</DropdownMenuRadioItem>
+                                      <DropdownMenuRadioItem value="promoter" className="text-xs font-bold">Promoter / Founder</DropdownMenuRadioItem>
+                                      <DropdownMenuRadioItem value="admin" className="text-xs font-bold">Administrator</DropdownMenuRadioItem>
+                                      <DropdownMenuRadioItem value="member" className="text-xs font-bold">General Member</DropdownMenuRadioItem>
+                                    </DropdownMenuRadioGroup>
+                                  </DropdownMenuSubContent>
+                                </DropdownMenuSub>
 
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem 
-                              onClick={() => deleteMember(member.id)}
-                              className="gap-2 text-xs py-2 text-destructive focus:text-destructive cursor-pointer"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" /> Remove Member
-                            </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem 
+                                  onClick={() => deleteMember(member.id)}
+                                  className="gap-2 text-xs py-2 text-destructive focus:text-destructive cursor-pointer"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" /> Remove Member
+                                </DropdownMenuItem>
+                              </>
+                            )}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>
@@ -852,15 +907,19 @@ export function MembersPage() {
                         <DropdownMenuItem onClick={() => viewProfile(member)} className="text-xs py-2 gap-2 cursor-pointer">
                            <FileText className="w-3.5 h-3.5" /> Profile
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => openEditDialog(member)} className="text-xs py-2 gap-2 cursor-pointer">
-                           <Pencil className="w-3.5 h-3.5" /> Edit
-                        </DropdownMenuItem>
-                        <DropdownMenuItem 
-                          onClick={() => deleteMember(member.id)}
-                          className="text-xs py-2 gap-2 text-destructive cursor-pointer"
-                        >
-                           <Trash2 className="w-3.5 h-3.5" /> Delete
-                        </DropdownMenuItem>
+                        {isAdmin && (
+                          <>
+                            <DropdownMenuItem onClick={() => openEditDialog(member)} className="text-xs py-2 gap-2 cursor-pointer">
+                               <Pencil className="w-3.5 h-3.5" /> Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              onClick={() => deleteMember(member.id)}
+                              className="text-xs py-2 gap-2 text-destructive cursor-pointer"
+                            >
+                               <Trash2 className="w-3.5 h-3.5" /> Delete
+                            </DropdownMenuItem>
+                          </>
+                        )}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
@@ -877,7 +936,13 @@ export function MembersPage() {
                       <p className="text-[8px] uppercase font-bold text-muted-foreground tracking-tighter">Equity</p>
                       <p className="text-[10px] font-bold text-foreground">{member.shares} Units</p>
                     </div>
-                    <div className="p-2 rounded-lg bg-secondary/20 space-y-1 text-primary cursor-pointer hover:bg-primary/5 active:scale-95 transition-all" onClick={() => toggleStatus(member)}>
+                    <div 
+                      className={cn(
+                        "p-2 rounded-lg bg-secondary/20 space-y-1 transition-all",
+                        isAdmin ? "text-primary cursor-pointer hover:bg-primary/5 active:scale-95" : "text-muted-foreground cursor-not-allowed"
+                      )} 
+                      onClick={() => isAdmin && toggleStatus(member)}
+                    >
                       <p className="text-[8px] uppercase font-bold text-muted-foreground tracking-tighter">Status</p>
                       <p className={cn(
                         "text-[10px] font-black uppercase",

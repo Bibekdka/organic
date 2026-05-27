@@ -41,6 +41,8 @@ import { db, auth } from '@/lib/firebase';
 import { Member, ShareTransaction, AppSettings, OnboardingRecord } from '@/types';
 import { handleFirestoreError, OperationType } from '@/lib/firestore-errors';
 import { toast } from 'sonner';
+import { useAuthStore } from '@/store/useAuthStore';
+import { cn } from '@/lib/utils';
 import { 
   Table, 
   TableBody, 
@@ -53,6 +55,8 @@ import {
 const COLORS = ['#4f46e5', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 
 export function SharesPage() {
+  const { user } = useAuthStore();
+  const isAdmin = user?.email === 'bibekdeka97@gmail.com';
   const [members, setMembers] = React.useState<Member[]>([]);
   const [transactions, setTransactions] = React.useState<ShareTransaction[]>([]);
   const [onboarding, setOnboarding] = React.useState<OnboardingRecord[]>([]);
@@ -123,6 +127,10 @@ export function SharesPage() {
   const expectedShareSale = totalOnboardingShares * sharePrice;
 
   const handleUpdatePrice = async () => {
+    if (!isAdmin) {
+      toast.error("Permission Denied: Only bibekdeka97@gmail.com can perform this action");
+      return;
+    }
     const price = parseFloat(newSharePrice);
     if (isNaN(price) || price <= 0) return;
     setIsSubmitting(true);
@@ -142,6 +150,10 @@ export function SharesPage() {
   };
 
   const handleUpdateShares = async () => {
+    if (!isAdmin) {
+      toast.error("Permission Denied: Only bibekdeka97@gmail.com can perform this action");
+      return;
+    }
     if (!selectedMemberId || !changeAmount || parseFloat(changeAmount) <= 0) return;
     
     setIsSubmitting(true);
@@ -188,6 +200,10 @@ export function SharesPage() {
   };
 
   const handleBuySellShares = async () => {
+    if (!isAdmin) {
+      toast.error("Permission Denied: Only bibekdeka97@gmail.com can perform this action");
+      return;
+    }
     if (!buySellMemberId || !buySellAmount || parseFloat(buySellAmount) <= 0) return;
     
     setIsSubmitting(true);
@@ -255,13 +271,13 @@ export function SharesPage() {
             <p className="text-muted-foreground text-sm">Equity distribution and capital history.</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={() => { setNewSharePrice(sharePrice.toString()); setIsPriceOpen(true); }} className="gap-2 text-foreground">
+            <Button disabled={!isAdmin} variant="outline" onClick={() => { setNewSharePrice(sharePrice.toString()); setIsPriceOpen(true); }} className="gap-2 text-foreground disabled:opacity-50">
               <CircleDollarSign className="w-4 h-4" /> Set Share Price
             </Button>
-            <Button variant="outline" onClick={() => { setBuySellMemberId(''); setBuySellType('buy'); setBuySellAmount(''); setIsBuySellOpen(true); }} className="gap-2 text-foreground">
+            <Button disabled={!isAdmin} variant="outline" onClick={() => { setBuySellMemberId(''); setBuySellType('buy'); setBuySellAmount(''); setIsBuySellOpen(true); }} className="gap-2 text-foreground disabled:opacity-50">
               <ArrowRightLeft className="w-4 h-4" /> Buy / Sell Shares
             </Button>
-            <Button onClick={() => setIsUpdateOpen(true)} className="gap-2 shadow-lg shadow-primary/20">
+            <Button disabled={!isAdmin} onClick={() => setIsUpdateOpen(true)} className="gap-2 shadow-lg shadow-primary/20 disabled:opacity-50">
               <ArrowRightLeft className="w-4 h-4" /> Issue/Transfer Shares
             </Button>
           </div>
@@ -366,6 +382,7 @@ export function SharesPage() {
                       </TableCell>
                       <TableCell className="text-right">
                         <Button 
+                          disabled={!isAdmin}
                           variant="outline" 
                           size="sm"
                           onClick={() => {
@@ -374,7 +391,7 @@ export function SharesPage() {
                             setBuySellAmount('');
                             setIsBuySellOpen(true);
                           }}
-                          className="h-7 px-3 text-[10px] text-foreground font-semibold"
+                          className={cn("h-7 px-3 text-[10px] text-foreground font-semibold disabled:opacity-50")}
                         >
                           Buy / Sell
                         </Button>
@@ -401,6 +418,7 @@ export function SharesPage() {
                   </div>
                   <div className="flex justify-end pr-1">
                     <Button 
+                      disabled={!isAdmin}
                       variant="outline" 
                       size="sm" 
                       onClick={() => {
@@ -409,7 +427,7 @@ export function SharesPage() {
                         setBuySellAmount('');
                         setIsBuySellOpen(true);
                       }}
-                      className="h-7 px-3 text-[10px] text-foreground font-semibold"
+                      className={cn("h-7 px-3 text-[10px] text-foreground font-semibold disabled:opacity-50")}
                     >
                       Buy / Sell Shares
                     </Button>
