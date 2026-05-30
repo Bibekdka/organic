@@ -14,7 +14,12 @@ import {
   LogOut,
   FileDown,
   FileSpreadsheet,
-  RefreshCw
+  RefreshCw,
+  Globe,
+  Activity,
+  Cpu,
+  CheckCircle2,
+  AlertTriangle
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -109,6 +114,87 @@ export function SettingsPage() {
       toast.error(`Redundancy Sync Failed: ${e.message || e}`);
     } finally {
       setIsSyncing(false);
+    }
+  };
+
+  // Render live deployment and diagnostic states
+  const [renderStatus, setRenderStatus] = React.useState<any>({
+    loading: true,
+    blueprintId: 'exs-d8de4qkp3tds73fgmjf0',
+    blueprint: null,
+    runs: [],
+    services: [],
+    error: null
+  });
+  const [triggeringDeploy, setTriggeringDeploy] = React.useState(false);
+
+  const fetchRenderStatus = async () => {
+    try {
+      const res = await fetch('/api/render/deploy/status');
+      if (res.ok) {
+        const data = await res.json();
+        setRenderStatus({
+          loading: false,
+          blueprintId: data.blueprintId || 'exs-d8de4qkp3tds73fgmjf0',
+          blueprint: data.blueprint,
+          runs: data.runs || [],
+          services: data.services || [],
+          error: null
+        });
+      } else {
+        const errText = await res.text();
+        throw new Error(errText || "Database and Service probes failed.");
+      }
+    } catch (err: any) {
+      console.error(err);
+      setRenderStatus(prev => ({
+        ...prev,
+        loading: false,
+        error: err.message || String(err)
+      }));
+    }
+  };
+
+  React.useEffect(() => {
+    fetchRenderStatus();
+    // Poll every 15 seconds to monitor deployment runs in real time
+    const interval = setInterval(fetchRenderStatus, 15000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleTriggerBlueprint = async () => {
+    setTriggeringDeploy(true);
+    try {
+      const res = await fetch('/api/render/deploy/trigger', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        toast.success("Render high-fidelity Blueprint deployment triggered! Building components...");
+        fetchRenderStatus();
+      } else {
+        throw new Error(data.error || "Deployment sync rejected.");
+      }
+    } catch (err: any) {
+      console.error(err);
+      toast.error(`Auto-Build Failed: ${err.message || err}`);
+    } finally {
+      setTriggeringDeploy(false);
+    }
+  };
+
+  const handleTriggerServiceDeploy = async (serviceId: string, serviceName: string) => {
+    try {
+      toast.info(`Triggering server deploy for ${serviceName}...`);
+      const res = await fetch(`/api/render/services/${serviceId}/deploy`, { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        toast.success(`Service deployment rebuild triggered for ${serviceName}!`);
+        fetchRenderStatus();
+      } else {
+        throw new Error(data.error || "Rebuild action failed.");
+      }
+    } catch (err: any) {
+      console.error(err);
+      toast.error(`Deployment trigger failed: ${err.message || err}`);
     }
   };
   
@@ -652,6 +738,208 @@ export function SettingsPage() {
 
               <p className="text-[11px] text-muted-foreground leading-relaxed">
                 ℹ️ <strong>Deployment Data Redundancy:</strong> Render services provide extreme database durability. When a <code>DATABASE_URL</code> is provisioned in Render, backups automatically insert replicated records to relational Postgres Tables. If not yet deployed to production, it functions in Sandbox Simulation mode perfectly for local preview.
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card className="border-none shadow-sm bg-card/50">
+            <CardHeader className="pb-3 border-b border-border/10">
+              <div className="flex items-center justify-between">
+                <div className="space-y-1">
+                  <CardTitle className="text-xl font-bold flex items-center gap-2">
+                    <Globe className="w-5 h-5 text-indigo-500 animate-pulse" />
+                    Render Deployments & Diagnostics Hub
+                  </CardTitle>
+                  <CardDescription>
+                    Monitor, debug, and coordinate live releases directly to Render via REST Orchestration.
+                  </CardDescription>
+                </div>
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  className="font-semibold text-xs h-7"
+                  onClick={fetchRenderStatus} 
+                  disabled={renderStatus.loading}
+                >
+                  <RefreshCw className={`w-3 h-3 mr-1 ${renderStatus.loading ? "animate-spin" : ""}`} />
+                  Refresh
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-6 pt-6">
+              
+              {/* Alert or loading status */}
+              {renderStatus.loading && renderStatus.runs.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-6 text-center text-muted-foreground gap-2">
+                  <Loader2 className="w-6 h-6 animate-spin text-indigo-500" />
+                  <p className="text-xs">Querying Render's Orchestrator v1 API endpoints...</p>
+                </div>
+              ) : renderStatus.error ? (
+                <div className="p-4 rounded-xl border border-destructive/20 bg-destructive/5 text-destructive space-y-2">
+                  <div className="flex items-center gap-2 font-bold text-xs">
+                    <AlertTriangle className="w-4 h-4 text-rose-500" />
+                    Render API Diagnostic Warning
+                  </div>
+                  <p className="text-xs leading-relaxed">
+                    {renderStatus.error}. Check if your Render token is valid, or ensure the Blueprint ID is active.
+                  </p>
+                </div>
+              ) : null}
+
+              {/* Main Orchestrator Panels */}
+              {!renderStatus.loading || renderStatus.runs.length > 0 ? (
+                <div className="space-y-6">
+                  {/* Status Indicator */}
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between p-4 rounded-xl border border-border/40 bg-secondary/15 gap-4">
+                    <div className="space-y-1">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Blueprint ID: <code className="text-primary font-mono text-[10px]">{renderStatus.blueprintId}</code></p>
+                      <h4 className="text-sm font-black flex items-center gap-2">
+                        {renderStatus.blueprint?.blueprint?.name || "Cooperative Financials App"}
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] uppercase font-bold bg-indigo-500/10 text-indigo-400">
+                          Blueprint Spec
+                        </span>
+                      </h4>
+                      <p className="text-xs text-muted-foreground">Coordinates Postgres, Node backends, and assets simultaneously.</p>
+                    </div>
+
+                    <Button 
+                      onClick={handleTriggerBlueprint} 
+                      disabled={triggeringDeploy}
+                      className="font-bold shrink-0 self-center bg-indigo-600 hover:bg-indigo-700 text-white h-9 px-4"
+                      size="sm"
+                    >
+                      {triggeringDeploy ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" />
+                          Triggering Blueprint Sync...
+                        </>
+                      ) : (
+                        <>
+                          <Cpu className="w-3.5 h-3.5 mr-2" />
+                          Force Blueprint Build & Sync
+                        </>
+                      )}
+                    </Button>
+                  </div>
+
+                  {/* Blueprint Runs Timeline */}
+                  <div className="space-y-3">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                      <Activity className="w-3.5 h-3.5 text-indigo-400" />
+                      Blueprint Run & Error Diagnostic History
+                    </h4>
+                    
+                    {renderStatus.runs.length === 0 ? (
+                      <div className="p-4 rounded-xl border border-dashed border-border/40 text-center text-xs text-muted-foreground">
+                        No blueprint run history captured. Trigger a sync above to create a run record.
+                      </div>
+                    ) : (
+                      <div className="space-y-2.5 max-h-[220px] overflow-y-auto pr-1">
+                        {renderStatus.runs.map((r: any) => {
+                          const run = r.blueprintRun || r;
+                          const isFailed = run.status === 'failed';
+                          const isSuccess = run.status === 'succeeded';
+                          const isRunning = ['initiated', 'syncing', 'running', 'in_progress'].includes(run.status);
+                          
+                          return (
+                            <div key={run.id} className="p-3 rounded-xl border border-border/30 bg-card flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 hover:border-indigo-500/20 transition-all text-xs">
+                              <div className="space-y-1.5 flex-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="font-mono text-[9px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground select-all font-black font-mono">
+                                    ID: {run.id}
+                                  </span>
+                                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                                    isSuccess ? "bg-emerald-500/10 text-emerald-500" :
+                                    isFailed ? "bg-rose-500/10 text-rose-500" :
+                                    isRunning ? "bg-amber-500/10 text-amber-500 animate-pulse" :
+                                    "bg-muted text-muted-foreground"
+                                  }`}>
+                                    {isFailed ? <AlertTriangle className="w-2.5 h-2.5" /> : isSuccess ? <CheckCircle2 className="w-2.5 h-2.5" /> : <Loader2 className="w-2.5 h-2.5 animate-spin" />}
+                                    {run.status}
+                                  </span>
+                                </div>
+                                <p className="text-[11px] text-muted-foreground">
+                                  Trigger: <span className="font-semibold text-foreground capitalize">{run.trigger?.type || 'manual'}</span> • Created: {run.createdAt ? new Date(run.createdAt).toLocaleString() : 'Just now'}
+                                </p>
+                                {isFailed && (
+                                  <div className="text-[10px] text-rose-400 p-2 rounded bg-rose-500/5 border border-rose-500/10 mt-1 leading-normal font-mono select-all">
+                                    ❌ Diagnostic Log: Blueprint run failed. Root reason: {run.error || "Free-tier Blueprint capacity limit exceeded or resource billing validation error."}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Independent/Static Web Fallback Services */}
+                  <div className="space-y-3 pt-2">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                      <Globe className="w-3.5 h-3.5 text-emerald-400" />
+                      Individual Services & Static Web Fallback Controls
+                    </h4>
+                    <p className="text-[11px] text-muted-foreground leading-normal">
+                      💡 <strong>Render Single Blueprint Limit Check:</strong> If the blueprint fails due to "Only 1 free blueprint is allowed per account", you can trigger static or standalone web service builds directly below:
+                    </p>
+
+                    {renderStatus.services.length === 0 ? (
+                      <div className="p-4 rounded-xl border border-dashed border-border/40 text-center text-xs text-muted-foreground">
+                        No active standalone services found connected to this API key.
+                      </div>
+                    ) : (
+                      <div className="space-y-2.5 max-h-[300px] overflow-y-auto pr-1">
+                        {renderStatus.services.map((s: any) => {
+                          const service = s.service || s;
+                          const isStatic = service.type === 'static_site';
+                          const isSuspended = service.suspended === 'suspended';
+                          
+                          return (
+                            <div key={service.id} className="p-3 rounded-xl border border-border/30 bg-card flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 hover:border-indigo-500/20 transition-all text-xs">
+                              <div className="space-y-1 flex-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="font-semibold text-foreground text-[13px]">{service.name}</span>
+                                  <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] uppercase font-bold ${
+                                    isStatic ? "bg-emerald-500/10 text-emerald-500" : "bg-sky-500/10 text-sky-400"
+                                  }`}>
+                                    {isStatic ? 'Static Web' : 'Web Service'}
+                                  </span>
+                                  {isSuspended && (
+                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] uppercase font-bold bg-rose-500/10 text-rose-500">
+                                      Suspended
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-[11px] text-muted-foreground truncate select-all">
+                                  Repo: <code className="text-secondary-foreground font-mono">{service.repo || 'github.com'}</code> • Branch: <code className="text-secondary-foreground font-mono">{service.branch || 'main'}</code>
+                                </p>
+                                {service.url && (
+                                  <a href={service.url} target="_blank" rel="noopener noreferrer" className="text-[10px] text-indigo-400 hover:underline flex items-center mt-1 truncate">
+                                    🔗 {service.url}
+                                  </a>
+                                )}
+                              </div>
+                              
+                              <Button 
+                                size="sm" 
+                                variant="outline" 
+                                className="font-bold self-start sm:self-center shrink-0 text-xs border-indigo-500/20 hover:bg-indigo-500/10 h-8"
+                                onClick={() => handleTriggerServiceDeploy(service.id, service.name)}
+                              >
+                                Rebuild & Deploy
+                              </Button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : null}
+
+              <p className="text-[11px] text-muted-foreground leading-normal mt-2">
+                ℹ️ <strong>Developer Orchestration Mode:</strong> The deployment dashboard leverages Render's REST v1 endpoints. Your Render blueprint links the primary service configurations and triggers automated git builds. Polling retrieves build outputs and reports diagnostic errors in real time.
               </p>
             </CardContent>
           </Card>

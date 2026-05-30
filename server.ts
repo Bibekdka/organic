@@ -347,6 +347,162 @@ async function startServer() {
     }
   });
 
+  // Render REST API proxy endpoints for High-Fidelity deploys, diagnostics, and static-site fallback options
+  app.get("/api/render/deploy/status", async (req, res) => {
+    const renderApiKey = process.env.RENDER_API_KEY || "rnd_fKF0DH1mAlx0bOtR71S6zapv1yTC";
+    const blueprintId = process.env.RENDER_BLUEPRINT_ID || "exs-d8de4qkp3tds73fgmjf0";
+
+    if (!renderApiKey) {
+      return res.status(400).json({ error: "Render API key not provided." });
+    }
+
+    try {
+      // 1. Fetch Blueprint Information
+      const bpRes = await fetch(`https://api.render.com/v1/blueprints/${blueprintId}`, {
+        headers: {
+          "Authorization": `Bearer ${renderApiKey}`,
+          "Accept": "application/json"
+        }
+      });
+      
+      let blueprintInfo = null;
+      if (bpRes.ok) {
+        blueprintInfo = await bpRes.json();
+      } else {
+        console.warn(`Render API: Could not fetch blueprint ${blueprintId} directly. Status: ${bpRes.status}`);
+      }
+
+      // 2. Fetch Blueprint Deployment Run History
+      const runsRes = await fetch(`https://api.render.com/v1/blueprints/${blueprintId}/runs`, {
+        headers: {
+          "Authorization": `Bearer ${renderApiKey}`,
+          "Accept": "application/json"
+        }
+      });
+      
+      let runsHistory = [];
+      if (runsRes.ok) {
+        runsHistory = await runsRes.json();
+      } else {
+        console.warn(`Render API: Could not fetch runs for blueprint ${blueprintId}. Status: ${runsRes.status}`);
+      }
+
+      // 3. Fetch User's General Services (Web service or Static site fallback)
+      const servicesRes = await fetch(`https://api.render.com/v1/services?limit=100`, {
+        headers: {
+          "Authorization": `Bearer ${renderApiKey}`,
+          "Accept": "application/json"
+        }
+      });
+
+      let servicesList = [];
+      if (servicesRes.ok) {
+        servicesList = await servicesRes.json();
+      } else {
+        console.warn(`Render API: Could not fetch general services list. Status: ${servicesRes.status}`);
+      }
+
+      return res.json({
+        success: true,
+        blueprintId,
+        blueprint: blueprintInfo,
+        runs: runsHistory,
+        services: servicesList
+      });
+    } catch (err: any) {
+      console.error("Render API query failed:", err);
+      return res.status(500).json({ 
+        success: false, 
+        error: err.message || String(err),
+        message: "Network request failed while connecting to Render REST APIs."
+      });
+    }
+  });
+
+  app.post("/api/render/deploy/trigger", async (req, res) => {
+    const renderApiKey = process.env.RENDER_API_KEY || "rnd_fKF0DH1mAlx0bOtR71S6zapv1yTC";
+    const blueprintId = process.env.RENDER_BLUEPRINT_ID || "exs-d8de4qkp3tds73fgmjf0";
+
+    if (!renderApiKey) {
+      return res.status(400).json({ error: "Render API key not provided." });
+    }
+
+    try {
+      const runRes = await fetch(`https://api.render.com/v1/blueprints/${blueprintId}/runs`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${renderApiKey}`,
+          "Accept": "application/json",
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({})
+      });
+
+      if (!runRes.ok) {
+        const errorText = await runRes.text();
+        return res.status(runRes.status).json({ 
+          success: false, 
+          error: `Render API rejected transaction: ${errorText}`
+        });
+      }
+
+      const runData = await runRes.json();
+      return res.json({
+        success: true,
+        message: "Render blueprint deploy triggered successfully!",
+        run: runData
+      });
+    } catch (err: any) {
+      console.error("Failed to trigger Render blueprint run:", err);
+      return res.status(500).json({
+        success: false,
+        error: err.message || String(err)
+      });
+    }
+  });
+
+  app.post("/api/render/services/:serviceId/deploy", async (req, res) => {
+    const renderApiKey = process.env.RENDER_API_KEY || "rnd_fKF0DH1mAlx0bOtR71S6zapv1yTC";
+    const { serviceId } = req.params;
+
+    if (!renderApiKey) {
+      return res.status(400).json({ error: "Render API key not provided." });
+    }
+
+    try {
+      const deployRes = await fetch(`https://api.render.com/v1/services/${serviceId}/deploys`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${renderApiKey}`,
+          "Accept": "application/json",
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({})
+      });
+
+      if (!deployRes.ok) {
+        const errorText = await deployRes.text();
+        return res.status(deployRes.status).json({
+          success: false,
+          error: `Service deployment request rejected: ${errorText}`
+        });
+      }
+
+      const deployData = await deployRes.json();
+      return res.json({
+        success: true,
+        message: "Render Service rebuild triggered successfully!",
+        deploy: deployData
+      });
+    } catch (err: any) {
+      console.error("Failed to trigger Render service deployment:", err);
+      return res.status(500).json({
+        success: false,
+        error: err.message || String(err)
+      });
+    }
+  });
+
   app.post("/api/gemini/insights", async (req, res) => {
     const { expenses } = req.body;
     if (!expenses || !Array.isArray(expenses)) {
