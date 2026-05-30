@@ -618,6 +618,8 @@ export function Dashboard() {
         const sharePrice = globalSettings?.sharePrice ?? 10;
         const totalOnboardingShares = (stats.onboarding || []).reduce((sum, item) => sum + (parseFloat(item.shares) || 0), 0);
         const expectedShareSale = totalOnboardingShares * sharePrice;
+        const totalIncome = (stats.allIncomes || []).reduce((sum, inc: any) => sum + (parseFloat(inc.amount) || 0), 0);
+        const netCashflow = totalIncome - stats.totalSpent;
         return (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
             <StatCard 
@@ -642,16 +644,18 @@ export function Dashboard() {
               onClick={() => setIsProjectedOpen(true)}
             />
             <StatCard 
-              title="Liability Score" 
-              value={stats.totalSpent > 0 ? "8.4" : "0"} 
-              icon={<AlertCircle className="w-5 h-5" />} 
-              color="bg-amber-500/10 text-amber-500"
+              title="Total Income" 
+              value={`₹${totalIncome.toLocaleString()}`} 
+              icon={<Wallet className="w-5 h-5" />} 
+              color="bg-emerald-500/10 text-emerald-500"
             />
             <StatCard 
               title="Net Cashflow" 
-              value={stats.totalSpent > 0 ? "Positive" : "Stable"} 
+              value={`${netCashflow >= 0 ? "₹" : "-₹"}${Math.abs(netCashflow).toLocaleString()}`} 
               icon={<TrendingUp className="w-5 h-5" />} 
-              color="bg-rose-500/10 text-rose-500"
+              color={netCashflow >= 0 ? "bg-emerald-500/10 text-emerald-500" : "bg-rose-500/10 text-rose-500"}
+              trend={netCashflow >= 0 ? "Surplus" : "Deficit"}
+              trendType={netCashflow >= 0 ? "up" : "down"}
             />
           </div>
         );
