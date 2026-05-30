@@ -6,7 +6,8 @@ import {
   AlertCircle, 
   Loader2,
   Plus,
-  CheckCircle2
+  CheckCircle2,
+  TrendingUp
 } from 'lucide-react';
 import { 
   Dialog, 
@@ -22,18 +23,29 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn, getUserAttribution } from '@/lib/utils';
 import { SplitType, Member, Frequency } from '@/types';
 import { collection, addDoc, serverTimestamp, query, onSnapshot, doc, updateDoc } from 'firebase/firestore';
 import { db, auth } from '@/lib/firebase';
 import { handleFirestoreError, OperationType } from '@/lib/firestore-errors';
 import { toast } from 'sonner';
+import { useAuthStore } from '@/store/useAuthStore';
 
 interface AddExpenseDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void; // eslint-disable-line no-unused-vars
   initialData?: any;
 }
+
+const INCOME_CATEGORIES = [
+  'Sales',
+  'Services',
+  'Grants',
+  'Donations',
+  'Interest',
+  'Other'
+];
 
 const DEFAULT_CATEGORIES = [
   'Electricity',
@@ -65,6 +77,8 @@ const DEFAULT_CATEGORIES = [
  *    - Manual: Direct amount entry per member.
  */
 export function AddExpenseDialog({ open, onOpenChange, initialData }: AddExpenseDialogProps) {
+  const { user } = useAuthStore();
+  const isAdmin = user?.email === 'bibekdeka97@gmail.com';
   const [members, setMembers] = React.useState<Member[]>([]);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
@@ -81,6 +95,17 @@ export function AddExpenseDialog({ open, onOpenChange, initialData }: AddExpense
   const [frequency, setFrequency] = React.useState<Frequency>('monthly');
   const [selectedMemberIds, setSelectedMemberIds] = React.useState<string[]>([]);
   const [manualSplits, setManualSplits] = React.useState<Record<string, number>>({});
+  const [transactionType, setTransactionType] = React.useState<'expense' | 'income'>('expense');
+  const [incomeNotes, setIncomeNotes] = React.useState('');
+
+  React.useEffect(() => {
+    if (initialData) return;
+    if (transactionType === 'income') {
+      setCategory('Sales');
+    } else {
+      setCategory('Grocery');
+    }
+  }, [transactionType, initialData]);
 
   /**
    * Effect: Initialize form with initialData if editing.
@@ -176,6 +201,49 @@ export function AddExpenseDialog({ open, onOpenChange, initialData }: AddExpense
   const isSplitValid = Math.abs(totalSplitAmount - amount) < 0.1;
 
   const handleSave = async () => {
+    if (!isAdmin) {
+      toast.error("Permission Denied: Only bibekdeka97@gmail.com can perform this action");
+      return;
+    }
+
+    if (transactionType === 'income') {
+      if (amount <= 0 || !description) {
+        toast.error("Please fill all fields correctly");
+        return;
+      }
+      
+      const userId = auth.currentUser?.uid;
+      if (!userId) {
+        toast.error("User not authenticated");
+        return;
+      }
+
+      setIsSubmitting(true);
+      try {
+        const attr = getUserAttribution();
+        await addDoc(collection(db, 'incomes'), {
+          source: description,
+          amount,
+          category: category,
+          date,
+          notes: incomeNotes,
+          createdAt: Date.now(),
+          createdBy: attr.userId,
+          createdByName: attr.userName,
+          createdByDevice: attr.device
+        });
+        toast.success("Income logged successfully");
+        onOpenChange(false);
+        resetForm();
+      } catch (error) {
+        toast.error("Failed to log income");
+        handleFirestoreError(error, OperationType.CREATE, 'incomes');
+      } finally {
+        setIsSubmitting(false);
+      }
+      return;
+    }
+
     if (!isSplitValid || amount <= 0 || !description) {
       toast.error("Please fill all fields correctly");
       return;
@@ -276,6 +344,8 @@ export function AddExpenseDialog({ open, onOpenChange, initialData }: AddExpense
     setSplitType('equal');
     setSelectedMemberIds(members.map(m => m.id));
     setDate(new Date().toISOString().split('T')[0]);
+    setTransactionType('expense');
+    setIncomeNotes('');
   };
 
   return (
@@ -283,13 +353,51 @@ export function AddExpenseDialog({ open, onOpenChange, initialData }: AddExpense
       <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto text-foreground">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Receipt className="w-5 h-5 text-primary" />
-            {initialData ? 'Edit Expense Record' : 'Log New Expense'}
+            {transactionType === 'expense' ? (
+              <>
+                <Receipt className="w-5 h-5 text-primary" />
+                {initialData ? 'Edit Expense Record' : 'Log New Expense'}
+              </>
+            ) : (
+              <>
+                <TrendingUp className="w-5 h-5 text-emerald-500" />
+                {initialData ? 'Edit Income Record' : 'Record Income'}
+              </>
+            )}
           </DialogTitle>
           <DialogDescription>
-            {initialData ? 'Update the details and allocation for this cooperative expense.' : 'Record a cooperative purchase and define allocation rules.'}
+            {transactionType === 'expense' 
+              ? (initialData ? 'Update the details and allocation for this cooperative expense.' : 'Record a cooperative purchase and define allocation rules.')
+              : 'Record a cash inflow or organization revenue item.'
+            }
           </DialogDescription>
         </DialogHeader>
+
+        {!isAdmin && (
+          <div className="flex items-center gap-2 p-3 rounded-lg text-xs font-semibold bg-rose-500/10 text-rose-500 mb-4 border border-rose-500/20">
+            <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
+            <span>Permission Denied: Only bibekdeka97@gmail.com can record or edit transactions in this applet.</span>
+          </div>
+        )}
+
+        {!initialData && (
+          <Tabs value={transactionType} onValueChange={(v) => {
+            setTransactionType(v as 'expense' | 'income');
+            setDescription('');
+            setAmount(0);
+            setIsCustomCategory(false);
+            setCustomCategory('');
+          }} className="w-full">
+            <TabsList className="grid w-full grid-cols-2 bg-secondary/20 p-1 rounded-xl">
+              <TabsTrigger value="expense" className="text-xs font-bold gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                <Receipt className="w-3.5 h-3.5" /> Log Expense
+              </TabsTrigger>
+              <TabsTrigger value="income" className="text-xs font-bold gap-2 data-[state=active]:bg-emerald-600 data-[state=active]:text-white">
+                <TrendingUp className="w-3.5 h-3.5" /> Record Income
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+        )}
 
         <div className="grid gap-6 py-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -304,206 +412,266 @@ export function AddExpenseDialog({ open, onOpenChange, initialData }: AddExpense
             </div>
             <div className="space-y-2">
               <Label>Category</Label>
-              <div className="flex gap-2">
-                {!isCustomCategory ? (
-                  <>
-                    <Select value={category} onValueChange={(v) => {
-                      if (v === 'custom') setIsCustomCategory(true);
-                      else setCategory(v);
-                    }}>
-                      <SelectTrigger className="w-full bg-background">
-                        <SelectValue placeholder="Category" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {DEFAULT_CATEGORIES.map(cat => (
-                          <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                        ))}
-                        <SelectItem value="custom" className="text-primary font-bold">
-                          + Add Custom...
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </>
-                ) : (
-                  <div className="flex-1 flex gap-2">
-                    <Input 
-                      placeholder="Custom Category name..." 
-                      value={customCategory}
-                      onChange={(e) => setCustomCategory(e.target.value)}
-                      className="flex-1"
-                    />
-                    <Button variant="ghost" size="sm" onClick={() => setIsCustomCategory(false)}>Cancel</Button>
-                  </div>
-                )}
-              </div>
+              {transactionType === 'expense' ? (
+                <div className="flex gap-2">
+                  {!isCustomCategory ? (
+                    <>
+                      <Select value={category} onValueChange={(v) => {
+                        if (v === 'custom') setIsCustomCategory(true);
+                        else setCategory(v);
+                      }}>
+                        <SelectTrigger className="w-full bg-background">
+                          <SelectValue placeholder="Category" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {DEFAULT_CATEGORIES.map(cat => (
+                            <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                          ))}
+                          <SelectItem value="custom" className="text-primary font-bold">
+                            + Add Custom...
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </>
+                  ) : (
+                    <div className="flex-1 flex gap-2">
+                      <Input 
+                        placeholder="Custom Category name..." 
+                        value={customCategory}
+                        onChange={(e) => setCustomCategory(e.target.value)}
+                        className="flex-1"
+                      />
+                      <Button variant="ghost" size="sm" onClick={() => setIsCustomCategory(false)}>Cancel</Button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <Select value={category} onValueChange={(v) => setCategory(v)}>
+                  <SelectTrigger className="w-full bg-background">
+                    <SelectValue placeholder="Income Category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {INCOME_CATEGORIES.map(cat => (
+                      <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
           </div>
           
-          <div className="flex items-center justify-between p-4 rounded-xl border border-dashed border-primary/20 bg-primary/5">
-             <div className="space-y-0.5">
-                <div className="flex items-center gap-2">
-                   <Repeat className="w-4 h-4 text-primary" />
-                   <Label className="text-sm font-bold">Recurring Expense</Label>
-                </div>
-                <p className="text-[10px] text-muted-foreground">Save as template for future periods.</p>
-             </div>
-             <div className="flex items-center gap-3">
-                {isRecurring && (
-                  <Select value={frequency} onValueChange={(v) => setFrequency(v as Frequency)}>
-                    <SelectTrigger className="h-8 w-28 text-[10px] uppercase font-bold bg-background">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="daily">Daily</SelectItem>
-                      <SelectItem value="weekly">Weekly</SelectItem>
-                      <SelectItem value="monthly">Monthly</SelectItem>
-                      <SelectItem value="yearly">Yearly</SelectItem>
-                    </SelectContent>
-                  </Select>
-                )}
-                <Switch checked={isRecurring} onCheckedChange={setIsRecurring} />
-             </div>
-          </div>
+          {transactionType === 'expense' && (
+            <div className="flex items-center justify-between p-4 rounded-xl border border-dashed border-primary/20 bg-primary/5">
+               <div className="space-y-0.5">
+                  <div className="flex items-center gap-2">
+                     <Repeat className="w-4 h-4 text-primary" />
+                     <Label className="text-sm font-bold">Recurring Expense</Label>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">Save as template for future periods.</p>
+               </div>
+               <div className="flex items-center gap-3">
+                  {isRecurring && (
+                    <Select value={frequency} onValueChange={(v) => setFrequency(v as Frequency)}>
+                      <SelectTrigger className="h-8 w-28 text-[10px] uppercase font-bold bg-background">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="daily">Daily</SelectItem>
+                        <SelectItem value="weekly">Weekly</SelectItem>
+                        <SelectItem value="monthly">Monthly</SelectItem>
+                        <SelectItem value="yearly">Yearly</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                  <Switch checked={isRecurring} onCheckedChange={setIsRecurring} />
+               </div>
+            </div>
+          )}
 
           <div className="space-y-2">
-            <Label>Purpose / Description</Label>
+            <Label>{transactionType === 'income' ? 'Income Source / Customer Name' : 'Purpose / Description'}</Label>
             <Input 
-              placeholder="What was this for?" 
+              placeholder={transactionType === 'income' ? 'e.g. Sales Revenue, Client Payment, Donor' : 'What was this for?'} 
               value={description}
               onChange={(e) => setDescription(e.target.value)}
             />
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Payer (Member)</Label>
-              <Select value={paidBy} onValueChange={setPaidBy}>
-                <SelectTrigger className="bg-background">
-                  <SelectValue placeholder="Select Payer">
-                    {members.find(m => m.id === paidBy)?.name}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {members.map(m => (
-                    <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Date</Label>
-              <Input 
-                type="date" 
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-              />
-            </div>
-          </div>
-
-          <div className="space-y-4 border rounded-xl p-6 bg-secondary/5 border-border/40">
-             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2">
-                <Label className="text-sm font-bold flex items-center gap-2 text-foreground">
-                  <PieChart className="w-4 h-4 text-primary" />
-                  Allocation Method
-                </Label>
-                <Select value={splitType} onValueChange={(v) => setSplitType(v as SplitType)}>
-                  <SelectTrigger className="w-full sm:w-[180px] bg-background">
-                    <SelectValue />
+          {transactionType === 'expense' ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Payer (Member)</Label>
+                <Select value={paidBy} onValueChange={setPaidBy}>
+                  <SelectTrigger className="bg-background">
+                    <SelectValue placeholder="Select Payer">
+                      {members.find(m => m.id === paidBy)?.name}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="equal">Split Equally</SelectItem>
-                    <SelectItem value="percentage">Percentage %</SelectItem>
-                    <SelectItem value="shares">By Equity Shares</SelectItem>
-                    <SelectItem value="custom">Manual Amount</SelectItem>
+                    {members.map(m => (
+                      <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
-             </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Date</Label>
+                <Input 
+                  type="date" 
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                />
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Date Received</Label>
+                <Input 
+                  type="date" 
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Internal Notes / Memo</Label>
+                <Input 
+                  placeholder="e.g. Invoice reference, customer details" 
+                  value={incomeNotes}
+                  onChange={(e) => setIncomeNotes(e.target.value)}
+                />
+              </div>
+            </div>
+          )}
 
-             <div className="space-y-4">
-                <div className="flex items-center justify-between px-1">
-                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Involved Members</p>
-                  <Button 
-                    variant="link" 
-                    className="h-auto p-0 text-[10px]"
-                    onClick={() => setSelectedMemberIds(members.map(m => m.id))}
-                  >
-                    Select All
-                  </Button>
-                </div>
+          {transactionType === 'expense' && (
+            <div className="space-y-4 border rounded-xl p-6 bg-secondary/5 border-border/40">
+               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2">
+                  <Label className="text-sm font-bold flex items-center gap-2 text-foreground">
+                    <PieChart className="w-4 h-4 text-primary" />
+                    Allocation Method
+                  </Label>
+                  <Select value={splitType} onValueChange={(v) => setSplitType(v as SplitType)}>
+                    <SelectTrigger className="w-full sm:w-[180px] bg-background">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="equal">Split Equally</SelectItem>
+                      <SelectItem value="percentage">Percentage %</SelectItem>
+                      <SelectItem value="shares">By Equity Shares</SelectItem>
+                      <SelectItem value="custom">Manual Amount</SelectItem>
+                    </SelectContent>
+                  </Select>
+               </div>
 
-                <div className="grid gap-2 max-h-[250px] overflow-y-auto pr-2 scrollbar-thin">
-                  {members.map((member) => (
-                    <div key={member.id} className={cn(
-                      "flex items-center justify-between gap-4 p-3 rounded-lg bg-card border transition-all h-14",
-                      selectedMemberIds.includes(member.id) ? "border-primary/20 shadow-sm" : "border-transparent opacity-60"
-                    )}>
-                      <div className="flex items-center gap-3">
-                        <Checkbox 
-                          id={`member-${member.id}`} 
-                          checked={selectedMemberIds.includes(member.id)}
-                          onCheckedChange={() => {
-                            setSelectedMemberIds(prev => 
-                              prev.includes(member.id) ? prev.filter(id => id !== member.id) : [...prev, member.id]
-                            );
-                          }}
-                        />
-                        <div className="flex flex-col">
-                          <label htmlFor={`member-${member.id}`} className="text-xs font-semibold cursor-pointer">
-                            {member.name}
-                          </label>
-                          <span className="text-[10px] text-muted-foreground font-mono">{member.shares || 0} Units</span>
-                        </div>
-                      </div>
+               <div className="space-y-4">
+                  <div className="flex items-center justify-between px-1">
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Involved Members</p>
+                    <Button 
+                      variant="link" 
+                      className="h-auto p-0 text-[10px]"
+                      onClick={() => setSelectedMemberIds(members.map(m => m.id))}
+                    >
+                      Select All
+                    </Button>
+                  </div>
 
-                      {selectedMemberIds.includes(member.id) && (
+                  <div className="grid gap-2 max-h-[250px] overflow-y-auto pr-2 scrollbar-thin">
+                    {members.map((member) => (
+                      <div key={member.id} className={cn(
+                        "flex items-center justify-between gap-4 p-3 rounded-lg bg-card border transition-all h-14",
+                        selectedMemberIds.includes(member.id) ? "border-primary/20 shadow-sm" : "border-transparent opacity-60"
+                      )}>
                         <div className="flex items-center gap-3">
-                          {(splitType === 'percentage' || splitType === 'custom') && (
-                            <div className="relative w-20">
-                              <Input 
-                                className="h-8 pr-6 text-right text-xs bg-background"
-                                placeholder={splitType === 'percentage' ? '%' : '₹'}
-                                value={manualSplits[member.id] || ''}
-                                onChange={(e) => {
-                                  const val = parseFloat(e.target.value) || 0;
-                                  setManualSplits(prev => ({ ...prev, [member.id]: val }));
-                                }}
-                              />
-                            </div>
-                          )}
-                          <div className="text-right min-w-[70px]">
-                            <p className="text-xs font-black">₹{splits.find(s => s.memberId === member.id)?.amount.toFixed(2) || '0.00'}</p>
+                          <Checkbox 
+                            id={`member-${member.id}`} 
+                            checked={selectedMemberIds.includes(member.id)}
+                            onCheckedChange={() => {
+                              setSelectedMemberIds(prev => 
+                                prev.includes(member.id) ? prev.filter(id => id !== member.id) : [...prev, member.id]
+                              );
+                            }}
+                          />
+                          <div className="flex flex-col">
+                            <label htmlFor={`member-${member.id}`} className="text-xs font-semibold cursor-pointer">
+                              {member.name}
+                            </label>
+                            <span className="text-[10px] text-muted-foreground font-mono">{member.shares || 0} Units</span>
                           </div>
                         </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-             </div>
 
-             {!isSplitValid && amount > 0 && selectedMemberIds.length > 0 && (
-               <div className={cn(
-                 "flex items-center gap-2 p-3 rounded-lg text-xs font-semibold",
-                 totalSplitAmount > amount ? "bg-rose-500/10 text-rose-500" : "bg-primary/10 text-primary"
-               )}>
-                 <AlertCircle className="w-4 h-4" />
-                 {totalSplitAmount > amount 
-                  ? `Over-allocated by ₹${(totalSplitAmount - amount).toFixed(2)}`
-                  : `Short by ₹${(amount - totalSplitAmount).toFixed(2)}`
-                 }
+                        {selectedMemberIds.includes(member.id) && (
+                          <div className="flex items-center gap-3">
+                            {(splitType === 'percentage' || splitType === 'custom') && (
+                              <div className="relative w-20">
+                                <Input 
+                                  className="h-8 pr-6 text-right text-xs bg-background"
+                                  placeholder={splitType === 'percentage' ? '%' : '₹'}
+                                  value={manualSplits[member.id] || ''}
+                                  onChange={(e) => {
+                                    const val = parseFloat(e.target.value) || 0;
+                                    setManualSplits(prev => ({ ...prev, [member.id]: val }));
+                                  }}
+                                />
+                              </div>
+                            )}
+                            <div className="text-right min-w-[70px]">
+                              <p className="text-xs font-black">₹{splits.find(s => s.memberId === member.id)?.amount.toFixed(2) || '0.00'}</p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                </div>
-             )}
-          </div>
+
+               {!isSplitValid && amount > 0 && selectedMemberIds.length > 0 && (
+                 <div className={cn(
+                   "flex items-center gap-2 p-3 rounded-lg text-xs font-semibold",
+                   totalSplitAmount > amount ? "bg-rose-500/10 text-rose-500" : "bg-primary/10 text-primary"
+                 )}>
+                   <AlertCircle className="w-4 h-4" />
+                   {totalSplitAmount > amount 
+                    ? `Over-allocated by ₹${(totalSplitAmount - amount).toFixed(2)}`
+                    : `Short by ₹${(amount - totalSplitAmount).toFixed(2)}`
+                   }
+                 </div>
+               )}
+            </div>
+          )}
         </div>
 
         <DialogFooter className="bg-muted/30 -mx-6 -mb-6 p-6 mt-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button 
-            disabled={!isSplitValid || amount <= 0 || isSubmitting}
+            disabled={
+              !isAdmin || 
+              isSubmitting || 
+              amount <= 0 || 
+              (transactionType === 'expense' && (!isSplitValid || !description)) || 
+              (transactionType === 'income' && !description)
+            }
             onClick={handleSave} 
-            className="shadow-lg shadow-primary/20 px-8"
+            className={cn(
+              "shadow-lg px-8 font-semibold",
+              transactionType === 'income' 
+                ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-200" 
+                : "shadow-primary/20"
+            )}
           >
-            {isSubmitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : (initialData ? <CheckCircle2 className="w-4 h-4 mr-2" /> : <Plus className="w-4 h-4 mr-2" />)}
-            {initialData ? 'Update Record' : 'Confirm & Log'}
+            {isSubmitting ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : initialData ? (
+              <CheckCircle2 className="w-4 h-4 mr-2" />
+            ) : (
+              <Plus className="w-4 h-4 mr-2" />
+            )}
+            {initialData 
+              ? 'Update Record' 
+              : transactionType === 'income' 
+                ? 'Record Income' 
+                : 'Confirm & Log'
+            }
           </Button>
         </DialogFooter>
       </DialogContent>

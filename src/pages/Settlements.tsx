@@ -8,10 +8,12 @@ import {
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { collection, onSnapshot } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Member } from '@/types';
 import { handleFirestoreError, OperationType } from '@/lib/firestore-errors';
+import { useAuthStore } from '@/store/useAuthStore';
+import { toast } from 'sonner';
 
 interface Settlement {
   from: string;
@@ -20,9 +22,45 @@ interface Settlement {
 }
 
 export function SettlementsPage() {
+  const { user } = useAuthStore();
   const [members, setMembers] = React.useState<Member[]>([]);
   const [expenses, setExpenses] = React.useState<any[]>([]);
   const [loading, setLoading] = React.useState(true);
+  const [isSettling, setIsSettling] = React.useState<Record<number, boolean>>({});
+
+  const handleRecordSettlement = async (s: Settlement, index: number) => {
+    const debtorMember = members.find(m => m.id === s.from);
+    const creditorMember = members.find(m => m.id === s.to);
+    if (!debtorMember || !creditorMember) return;
+
+    setIsSettling(prev => ({ ...prev, [index]: true }));
+    try {
+      await addDoc(collection(db, 'expenses'), {
+        description: `Cooperative Debt Clearance: ${debtorMember.name} settled up with ${creditorMember.name}`,
+        amount: parseFloat(s.amount.toFixed(2)),
+        date: new Date().toISOString().split('T')[0],
+        category: 'Settlement',
+        paidBy: s.from, // Debtor paid
+        splitType: 'custom',
+        splits: [
+          {
+            memberId: s.to, // to Creditor
+            amount: parseFloat(s.amount.toFixed(2))
+          }
+        ],
+        createdAt: serverTimestamp(),
+        createdByName: user?.displayName || user?.email?.split('@')[0] || 'System',
+        createdByEmail: user?.email || '',
+        isRecurring: false
+      });
+      toast.success(`Settlement of ₹${s.amount.toLocaleString()} from ${debtorMember.name} to ${creditorMember.name} successfully logged!`);
+    } catch (err: any) {
+      toast.error(`Settle-up failed: ${err.message || err}`);
+      handleFirestoreError(err, OperationType.CREATE, 'expenses');
+    } finally {
+      setIsSettling(prev => ({ ...prev, [index]: false }));
+    }
+  };
 
   React.useEffect(() => {
     // Listen to Members
@@ -182,9 +220,19 @@ export function SettlementsPage() {
                           <p className="text-sm font-bold text-foreground truncate">{members.find(m => m.id === s.to)?.name || `User (${s.to.substring(0, 5)}...)`}</p>
                        </div>
                     </div>
-                    <Button variant="ghost" size="sm" className="w-full mt-4 h-8 text-[10px] uppercase font-bold tracking-widest hover:bg-emerald-500/10 hover:text-emerald-500 gap-2 text-foreground border border-transparent hover:border-emerald-500/20">
-                       <CheckCircle2 className="w-3.5 h-3.5" />
-                       Record as Settled
+                    <Button 
+                       onClick={() => handleRecordSettlement(s, idx)}
+                       disabled={isSettling[idx]}
+                       variant="ghost" 
+                       size="sm" 
+                       className="w-full mt-4 h-8 text-[10px] uppercase font-bold tracking-widest hover:bg-emerald-500/10 hover:text-emerald-500 gap-2 text-foreground border border-transparent hover:border-emerald-500/20 disabled:opacity-50"
+                    >
+                       {isSettling[idx] ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-500" />
+                       ) : (
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                       )}
+                       {isSettling[idx] ? 'Recording Settlement...' : 'Record as Settled'}
                     </Button>
                  </div>
                )) : (

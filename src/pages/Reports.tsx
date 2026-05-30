@@ -8,7 +8,8 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Filter,
-  Loader2
+  Loader2,
+  Users
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -37,17 +38,28 @@ const COLORS = ['#4f46e5', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'
 
 export function ReportsPage() {
   const [expenses, setExpenses] = React.useState<any[]>([]);
+  const [members, setMembers] = React.useState<any[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [timeRange, setTimeRange] = React.useState('last_30_days');
+  const [memberView, setMemberView] = React.useState('bar');
 
   React.useEffect(() => {
+    // 1. Fetch expenses
     const q = query(collection(db, 'expenses'), orderBy('date', 'asc'));
-    const unsub = onSnapshot(q, (snapshot) => {
+    const unsubExp = onSnapshot(q, (snapshot) => {
       setExpenses(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
-      setLoading(false);
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'expenses'));
 
-    return unsub;
+    // 2. Fetch members
+    const unsubMem = onSnapshot(collection(db, 'members'), (snapshot) => {
+      setMembers(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+      setLoading(false);
+    }, (error) => handleFirestoreError(error, OperationType.LIST, 'members'));
+
+    return () => {
+      unsubExp();
+      unsubMem();
+    };
   }, []);
 
   const categoryData = React.useMemo(() => {
@@ -57,6 +69,29 @@ export function ReportsPage() {
     });
     return Object.entries(counts).map(([name, value]) => ({ name, value }));
   }, [expenses]);
+
+  const memberData = React.useMemo(() => {
+    const data: Record<string, number> = {};
+    members.forEach(m => {
+      data[m.id] = 0;
+    });
+
+    expenses.forEach(exp => {
+      if (exp.paidBy) {
+        data[exp.paidBy] = (data[exp.paidBy] || 0) + (exp.amount || 0);
+      }
+    });
+
+    return Object.entries(data).map(([id, value]) => {
+      const member = members.find(m => m.id === id);
+      return {
+        name: member?.name || `Member (${id.substring(0, 5)})`,
+        value: value,
+        email: member?.email || '',
+        role: member?.role || 'member'
+      };
+    }).sort((a, b) => b.value - a.value);
+  }, [expenses, members]);
 
   const monthlyTrends = React.useMemo(() => {
     const trends: Record<string, number> = {};
@@ -251,24 +286,70 @@ export function ReportsPage() {
                 <CardTitle>Member Spending Comparison</CardTitle>
                 <CardDescription>Individual contribution levels and paid amounts.</CardDescription>
              </div>
-             <Tabs defaultValue="bar">
+             <Tabs value={memberView} onValueChange={setMemberView}>
                 <TabsList className="bg-secondary/20">
-                   <TabsTrigger value="bar">Bar</TabsTrigger>
-                   <TabsTrigger value="area">List</TabsTrigger>
+                   <TabsTrigger value="bar">Bar Chart</TabsTrigger>
+                   <TabsTrigger value="list">List View</TabsTrigger>
                 </TabsList>
              </Tabs>
           </div>
         </CardHeader>
-        <CardContent className="h-[350px]">
-           <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={categoryData}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(0,0,0,0.05)" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12 }} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12 }} />
-                <Tooltip />
-                <Bar dataKey="value" fill="#4f46e5" radius={[6, 6, 0, 0]} barSize={40} />
-              </BarChart>
-           </ResponsiveContainer>
+        <CardContent className="min-h-[350px] flex flex-col justify-center">
+           {memberView === 'bar' ? (
+              <div className="h-[350px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                   <BarChart data={memberData}>
+                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(0,0,0,0.05)" />
+                     <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11 }} />
+                     <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11 }} tickFormatter={(val) => `₹${val}`} />
+                     <Tooltip formatter={(value) => [`₹${(Number(value) || 0).toLocaleString()}`, 'Amount Paid']} />
+                     <Bar dataKey="value" fill="#4f46e5" radius={[6, 6, 0, 0]} barSize={40}>
+                        {memberData.map((entry, index) => (
+                           <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                     </Bar>
+                   </BarChart>
+                </ResponsiveContainer>
+              </div>
+           ) : (
+              <div className="space-y-4 max-h-[350px] overflow-y-auto pr-2">
+                 {memberData.length > 0 ? memberData.map((member, index) => {
+                    const maxVal = Math.max(...memberData.map(m => m.value || 1)) || 1;
+                    const percent = ((member.value || 0) / maxVal) * 100;
+                    return (
+                       <div key={index} className="p-4 rounded-xl border border-secondary/10 bg-secondary/5 hover:bg-secondary/10 hover:border-primary/20 transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                          <div className="flex items-center gap-3">
+                             <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-sm">
+                                {member.name[0]}
+                             </div>
+                             <div>
+                                <p className="font-bold text-sm text-foreground">{member.name}</p>
+                                <p className="text-xs text-muted-foreground">{member.email || 'No Email'} • <span className="uppercase text-[9px] font-black">{member.role}</span></p>
+                             </div>
+                          </div>
+                          
+                          <div className="flex-1 w-full sm:max-w-md">
+                             <div className="flex items-center justify-between text-xs font-semibold mb-1">
+                                <span className="text-muted-foreground">Cooperative Share</span>
+                                <span className="text-foreground">₹{(member.value || 0).toLocaleString()}</span>
+                             </div>
+                             <div className="w-full bg-secondary/35 h-2 rounded-full overflow-hidden">
+                                <div 
+                                   className="bg-primary h-full transition-all duration-500 rounded-full" 
+                                   style={{ width: `${percent}%`, backgroundColor: COLORS[index % COLORS.length] }}
+                                />
+                             </div>
+                          </div>
+                       </div>
+                    );
+                 }) : (
+                    <div className="py-12 text-center text-muted-foreground">
+                       <Users className="w-12 h-12 mx-auto mb-2 opacity-10" />
+                       <p>No members registered in organization roster.</p>
+                    </div>
+                 )}
+              </div>
+           )}
         </CardContent>
       </Card>
     </div>
