@@ -2,8 +2,27 @@ import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
+import pg from "pg";
+
+const { Pool } = pg;
+
+// Establish database pool if DATABASE_URL is set, using lazy/defensive initialization
+let pool: any = null;
+if (process.env.DATABASE_URL) {
+  try {
+    pool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: {
+        rejectUnauthorized: false
+      }
+    });
+  } catch (err) {
+    console.error("Failed to initialize PostgreSQL connection pool:", err);
+  }
+}
 
 async function startServer() {
+
   const app = express();
   const PORT = 3000;
 
@@ -29,6 +48,71 @@ async function startServer() {
 
   // Enable JSON request body parsing
   app.use(express.json());
+
+  // Table initialization for data redundancy
+  async function initPostgresBackup() {
+    if (!pool) {
+      console.log("No PostgreSQL Pool configured. Render database backup is disabled locally.");
+      return;
+    }
+    try {
+      const client = await pool.connect();
+      console.log("Connected to Render PostgreSQL successfully. Initializing backup tables...");
+      
+      // Create expenses backup table
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS expenses_backup (
+          id VARCHAR(255) PRIMARY KEY,
+          description TEXT,
+          amount DECIMAL(15, 2),
+          date VARCHAR(50),
+          category VARCHAR(255),
+          paid_by VARCHAR(255),
+          created_at BIGINT,
+          created_by_name VARCHAR(255),
+          created_by_email VARCHAR(255),
+          splits JSONB,
+          synced_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
+      // Create incomes backup table
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS incomes_backup (
+          id VARCHAR(255) PRIMARY KEY,
+          source TEXT,
+          amount DECIMAL(15, 2),
+          category VARCHAR(255),
+          date VARCHAR(50),
+          notes TEXT,
+          created_at BIGINT,
+          created_by VARCHAR(255),
+          created_by_name VARCHAR(255),
+          synced_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
+      // Create members backup table
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS members_backup (
+          id VARCHAR(255) PRIMARY KEY,
+          name VARCHAR(255),
+          email VARCHAR(255),
+          role VARCHAR(255),
+          shares DECIMAL(15, 2),
+          synced_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
+      client.release();
+      console.log("Render PostgreSQL backup tables initialized successfully.");
+    } catch (error) {
+      console.error("Failed to initialize Render PostgreSQL backup tables:", error);
+    }
+  }
+
+  // Run database backup initialization
+  initPostgresBackup();
 
   // High-fidelity dynamic financial heuristic analysis engine (safe fallback)
   function generateHeuristicInsights(expenses: any[]): string[] {
@@ -114,6 +198,155 @@ async function startServer() {
   let useLocalFallback = false;
 
   // API Routes MUST be mounted BEFORE Vite middleware
+  app.get("/api/backup/status", async (req, res) => {
+    if (!pool) {
+      return res.json({
+        configured: false,
+        status: "disabled",
+        message: "No Render DATABASE_URL environment variable provided.",
+        counts: { expenses: 0, incomes: 0, members: 0 }
+      });
+    }
+
+    try {
+      const client = await pool.connect();
+      const expRes = await client.query("SELECT COUNT(*) FROM expenses_backup");
+      const incRes = await client.query("SELECT COUNT(*) FROM incomes_backup");
+      const memRes = await client.query("SELECT COUNT(*) FROM members_backup");
+      client.release();
+
+      return res.json({
+        configured: true,
+        status: "active",
+        message: "Render PostgreSQL Database Connected and Healthy.",
+        counts: {
+          expenses: parseInt(expRes.rows[0].count),
+          incomes: parseInt(incRes.rows[0].count),
+          members: parseInt(memRes.rows[0].count)
+        }
+      });
+    } catch (err: any) {
+      return res.json({
+        configured: true,
+        status: "error",
+        message: `Database connection error: ${err.message || err}`,
+        counts: { expenses: 0, incomes: 0, members: 0 }
+      });
+    }
+  });
+
+  app.post("/api/backup/sync", async (req, res) => {
+    const { expenses, incomes, members } = req.body;
+    
+    if (!pool) {
+      return res.status(400).json({ success: false, count: 0, error: "PostgreSQL Database pool is not initialized." });
+    }
+    
+    let client;
+    try {
+      client = await pool.connect();
+      
+      // Begin transaction
+      await client.query('BEGIN');
+      
+      let totalSynced = 0;
+
+      // 1. Sync members
+      if (members && members.length > 0) {
+        for (const m of members) {
+          await client.query(`
+            INSERT INTO members_backup (id, name, email, role, shares, synced_at)
+            VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
+            ON CONFLICT (id) DO UPDATE SET
+              name = EXCLUDED.name,
+              email = EXCLUDED.email,
+              role = EXCLUDED.role,
+              shares = EXCLUDED.shares,
+              synced_at = CURRENT_TIMESTAMP
+          `, [m.id, m.name || '', m.email || '', m.role || '', m.shares || 0]);
+          totalSynced++;
+        }
+      }
+
+      // 2. Sync expenses
+      if (expenses && expenses.length > 0) {
+        for (const e of expenses) {
+          const createdAtVal = e.createdAt ? (typeof e.createdAt === 'object' && e.createdAt.seconds ? e.createdAt.seconds * 1000 : Number(e.createdAt)) : Date.now();
+          await client.query(`
+            INSERT INTO expenses_backup (id, description, amount, date, category, paid_by, created_at, created_by_name, created_by_email, splits, synced_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, CURRENT_TIMESTAMP)
+            ON CONFLICT (id) DO UPDATE SET
+              description = EXCLUDED.description,
+              amount = EXCLUDED.amount,
+              date = EXCLUDED.date,
+              category = EXCLUDED.category,
+              paid_by = EXCLUDED.paid_by,
+              created_at = EXCLUDED.created_at,
+              created_by_name = EXCLUDED.created_by_name,
+              created_by_email = EXCLUDED.created_by_email,
+              splits = EXCLUDED.splits,
+              synced_at = CURRENT_TIMESTAMP
+          `, [
+            e.id, 
+            e.description || '', 
+            Number(e.amount) || 0, 
+            e.date || '', 
+            e.category || '', 
+            e.paidBy || '', 
+            createdAtVal, 
+            e.createdByName || '', 
+            e.createdByEmail || '', 
+            JSON.stringify(e.splits || [])
+          ]);
+          totalSynced++;
+        }
+      }
+
+      // 3. Sync incomes
+      if (incomes && incomes.length > 0) {
+        for (const inc of incomes) {
+          const createdAtVal = inc.createdAt ? Number(inc.createdAt) : Date.now();
+          await client.query(`
+            INSERT INTO incomes_backup (id, source, amount, category, date, notes, created_at, created_by, created_by_name, synced_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, CURRENT_TIMESTAMP)
+            ON CONFLICT (id) DO UPDATE SET
+              source = EXCLUDED.source,
+              amount = EXCLUDED.amount,
+              category = EXCLUDED.category,
+              date = EXCLUDED.date,
+              notes = EXCLUDED.notes,
+              created_at = EXCLUDED.created_at,
+              created_by = EXCLUDED.created_by,
+              created_by_name = EXCLUDED.created_by_name,
+              synced_at = CURRENT_TIMESTAMP
+          `, [
+            inc.id,
+            inc.source || '',
+            Number(inc.amount) || 0,
+            inc.category || '',
+            inc.date || '',
+            inc.notes || '',
+            createdAtVal,
+            inc.createdBy || '',
+            inc.createdByName || ''
+          ]);
+          totalSynced++;
+        }
+      }
+
+      await client.query('COMMIT');
+      return res.json({ success: true, count: totalSynced });
+    } catch (error: any) {
+      if (client) {
+        await client.query('ROLLBACK');
+      }
+      console.error("Backup sync transaction failed on endpoint:", error);
+      return res.status(500).json({ success: false, count: 0, error: error.message || String(error) });
+    } finally {
+      if (client) client.release();
+    }
+  });
+
   app.post("/api/gemini/insights", async (req, res) => {
     const { expenses } = req.body;
     if (!expenses || !Array.isArray(expenses)) {

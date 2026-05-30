@@ -13,7 +13,8 @@ import {
   User,
   LogOut,
   FileDown,
-  FileSpreadsheet
+  FileSpreadsheet,
+  RefreshCw
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -36,6 +37,80 @@ export function SettingsPage() {
   const [isSaving, setIsSaving] = React.useState(false);
   const [isExportingPDF, setIsExportingPDF] = React.useState(false);
   const [isExportingCSV, setIsExportingCSV] = React.useState(false);
+
+  // Relational postgres data redundancy backup states
+  const [backupStatus, setBackupStatus] = React.useState<any>({
+    configured: false,
+    status: 'checking',
+    message: 'Polling backing database status...',
+    counts: { expenses: 0, incomes: 0, members: 0 }
+  });
+  const [isSyncing, setIsSyncing] = React.useState(false);
+
+  const fetchBackupStatus = async () => {
+    try {
+      const res = await fetch('/api/backup/status');
+      if (res.ok) {
+        const data = await res.json();
+        setBackupStatus(data);
+      }
+    } catch (e) {
+      console.error("Failed to query database backup status:", e);
+      setBackupStatus({
+        configured: false,
+        status: 'error',
+        message: 'Unable to communicate with storage supervisor.',
+        counts: { expenses: 0, incomes: 0, members: 0 }
+      });
+    }
+  };
+
+  React.useEffect(() => {
+    fetchBackupStatus();
+  }, []);
+
+  const handleSyncBackup = async () => {
+    setIsSyncing(true);
+    try {
+      // 1. Fetch expenses
+      const expensesSnapshot = await getDocs(collection(db, 'expenses'));
+      const expenses = expensesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
+
+      // 2. Fetch incomes
+      const incomesSnapshot = await getDocs(collection(db, 'incomes'));
+      const incomes = incomesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
+
+      // 3. Fetch members
+      const membersSnapshot = await getDocs(collection(db, 'members'));
+      const members = membersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
+
+      const response = await fetch('/api/backup/sync', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ expenses, incomes, members })
+      });
+
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || "Network sync failed");
+      }
+
+      const data = await response.json();
+      if (data.success) {
+        toast.success(`Redundancy backup successful! Synced ${data.count} items into Render PostgreSQL`);
+        fetchBackupStatus();
+      } else {
+        throw new Error(data.error || "Backup sync transaction aborted.");
+      }
+    } catch (e: any) {
+      console.error(e);
+      toast.error(`Redundancy Sync Failed: ${e.message || e}`);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
   
   const handleSave = () => {
     setIsSaving(true);
@@ -498,6 +573,86 @@ export function SettingsPage() {
                   </div>
                   <Switch defaultChecked />
                </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-none shadow-sm bg-card/50">
+            <CardHeader>
+              <CardTitle className="text-xl font-bold flex items-center gap-2">
+                <Database className="w-5 h-5 text-indigo-500" />
+                Render Relational Redundancy Backup
+              </CardTitle>
+              <CardDescription>
+                Synchronize and replicate your primary Firebase documents into Render's PostgreSQL storage.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between p-4 rounded-xl border border-border/40 bg-secondary/15 gap-4">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Engine Status:</span>
+                    {backupStatus.status === 'active' ? (
+                      <span className="inline-flex items-center gap-1.5 px-2 bg-emerald-500/10 text-emerald-500 text-[10px] font-black rounded-full h-5">
+                        <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+                        PostgreSQL Active
+                      </span>
+                    ) : backupStatus.status === 'error' ? (
+                      <span className="inline-flex items-center gap-1.5 px-2 bg-rose-500/10 text-rose-500 text-[10px] font-black rounded-full h-5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                        Relational Error
+                      </span>
+                    ) : backupStatus.status === 'checking' ? (
+                      <span className="inline-flex items-center gap-1.5 px-2 bg-amber-500/10 text-amber-500 text-[10px] font-black rounded-full h-5 animate-pulse">
+                        Probing...
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 px-2 bg-slate-500/10 text-slate-500 text-[10px] font-black rounded-full h-5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+                        Simulation Sandbox
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground leading-relaxed">{backupStatus.message}</p>
+                </div>
+                <Button 
+                  onClick={handleSyncBackup} 
+                  disabled={isSyncing} 
+                  variant={backupStatus.status === 'active' ? "default" : "outline"}
+                  className="font-bold shrink-0 self-center h-8"
+                  size="sm"
+                >
+                  {isSyncing ? (
+                    <>
+                      <Loader2 className="w-3" />
+                      Syncing...
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="w-3 h-3 mr-1.5" />
+                      Force Backup
+                    </>
+                  )}
+                </Button>
+              </div>
+
+              <div className="grid grid-cols-3 gap-4 text-center">
+                <div className="p-3 rounded-xl bg-secondary/10 border border-border/20">
+                  <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest text-ellipsis overflow-hidden truncate">Expenses</p>
+                  <p className="text-xl font-black text-foreground mt-1">{backupStatus.counts?.expenses || 0}</p>
+                </div>
+                <div className="p-3 rounded-xl bg-secondary/10 border border-border/20">
+                  <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest text-ellipsis overflow-hidden truncate">Incomes</p>
+                  <p className="text-xl font-black text-foreground mt-1">{backupStatus.counts?.incomes || 0}</p>
+                </div>
+                <div className="p-3 rounded-xl bg-secondary/10 border border-border/20">
+                  <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest text-ellipsis overflow-hidden truncate">Members</p>
+                  <p className="text-xl font-black text-foreground mt-1">{backupStatus.counts?.members || 0}</p>
+                </div>
+              </div>
+
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                ℹ️ <strong>Deployment Data Redundancy:</strong> Render services provide extreme database durability. When a <code>DATABASE_URL</code> is provisioned in Render, backups automatically insert replicated records to relational Postgres Tables. If not yet deployed to production, it functions in Sandbox Simulation mode perfectly for local preview.
+              </p>
             </CardContent>
           </Card>
 
