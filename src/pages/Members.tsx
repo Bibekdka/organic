@@ -187,10 +187,11 @@ export function MembersPage() {
     setIsSubmitting(true);
     try {
       const attr = getUserAttribution();
-      await addDoc(collection(db, 'members'), {
+      const memberShares = parseFloat(newShares) || 0;
+      const docRef = await addDoc(collection(db, 'members'), {
         name: newName,
         email: newEmail || '',
-        shares: parseFloat(newShares) || 0,
+        shares: memberShares,
         role: newRole,
         status: 'active',
         avatarUrl: newAvatar,
@@ -205,6 +206,34 @@ export function MembersPage() {
         createdByDevice: attr.device,
         createdBy: attr.userId
       });
+
+      if (memberShares > 0) {
+        // Log transaction
+        await addDoc(collection(db, 'share_transactions'), {
+          memberId: docRef.id,
+          memberName: newName,
+          previousUnits: 0,
+          newUnits: memberShares,
+          change: memberShares,
+          reason: 'Initial Share Purchase',
+          createdAt: serverTimestamp(),
+          createdByName: attr.userName
+        });
+
+        // Add to incomes
+        await addDoc(collection(db, 'incomes'), {
+          source: `Share Purchase: ${newName}`,
+          amount: memberShares * sharePrice,
+          category: 'Sales',
+          date: new Date().toISOString().split('T')[0],
+          notes: `Member Share Purchase of ${memberShares} units @ ₹${sharePrice}/unit (Initial Join)`,
+          createdAt: Date.now(),
+          createdBy: attr.userId || 'Unknown',
+          createdByName: attr.userName,
+          createdByDevice: attr.device
+        });
+      }
+
       toast.success(`${newName} added to the organization`);
       setIsAddOpen(false);
       resetAddForm();
@@ -258,11 +287,12 @@ export function MembersPage() {
     setIsSubmitting(true);
     try {
       const attr = getUserAttribution();
+      const memberShares = record.shares || 0;
       // 1. Add to members
-      await addDoc(collection(db, 'members'), {
+      const docRef = await addDoc(collection(db, 'members'), {
         name: record.name,
         email: record.email || '',
-        shares: record.shares || 0,
+        shares: memberShares,
         role: record.suggestedRole || 'member',
         status: 'active',
         gender: record.gender || 'male',
@@ -276,6 +306,33 @@ export function MembersPage() {
         createdByName: attr.userName,
         createdByDevice: attr.device
       });
+
+      if (memberShares > 0) {
+        // Log transaction
+        await addDoc(collection(db, 'share_transactions'), {
+          memberId: docRef.id,
+          memberName: record.name,
+          previousUnits: 0,
+          newUnits: memberShares,
+          change: memberShares,
+          reason: 'Initial Share Purchase',
+          createdAt: serverTimestamp(),
+          createdByName: attr.userName
+        });
+
+        // Add to incomes
+        await addDoc(collection(db, 'incomes'), {
+          source: `Share Purchase: ${record.name}`,
+          amount: memberShares * sharePrice,
+          category: 'Sales',
+          date: new Date().toISOString().split('T')[0],
+          notes: `Member Share Purchase of ${memberShares} units @ ₹${sharePrice}/unit (Onboard Join)`,
+          createdAt: Date.now(),
+          createdBy: attr.userId || 'Unknown',
+          createdByName: attr.userName,
+          createdByDevice: attr.device
+        });
+      }
 
       // 2. Remove from onboarding
       await deleteDoc(doc(db, 'onboarding', record.id));

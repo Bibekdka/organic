@@ -388,44 +388,92 @@ export function Dashboard() {
       .sort((a, b) => b.balance - a.balance);
   }, [stats.members, stats.allExpenses]);
 
+  const isSharePurchase = (inc: any) => {
+    const src = (inc.source || '').toLowerCase();
+    const cat = (inc.category || '').toLowerCase();
+    const n = (inc.notes || '').toLowerCase();
+    return src.includes('share purchase') || cat.includes('shares') || cat.includes('sales') && src.includes('share') || n.includes('share purchase') || n.includes('initial share purchase');
+  };
+
+  const liveSharesIncome = React.useMemo(() => {
+    const price = globalSettings?.sharePrice ?? 10;
+    return (stats.members || []).reduce((sum, m: any) => sum + (parseFloat(m.shares) || 0), 0) * price;
+  }, [stats.members, globalSettings]);
+
+  const nonShareIncomes = React.useMemo(() => {
+    return (stats.allIncomes || []).filter((inc: any) => !isSharePurchase(inc));
+  }, [stats.allIncomes]);
+
+  const dynamicTotalIncome = React.useMemo(() => {
+    const nonShareTotal = nonShareIncomes.reduce((sum, inc: any) => sum + (parseFloat(inc.amount) || 0), 0);
+    return nonShareTotal + liveSharesIncome;
+  }, [nonShareIncomes, liveSharesIncome]);
+
   const bankBalance = React.useMemo(() => {
-    const inboundTotal = (stats.allIncomes || []).reduce((sum, inc: any) => sum + (parseFloat(inc.amount) || 0), 0);
     const outboundTotal = (stats.allExpenses || [])
       .filter((exp: any) => exp.paidBy === 'bank')
       .reduce((sum, exp: any) => sum + (parseFloat(exp.amount) || 0), 0);
-    return inboundTotal - outboundTotal;
-  }, [stats.allIncomes, stats.allExpenses]);
+    return dynamicTotalIncome - outboundTotal;
+  }, [dynamicTotalIncome, stats.allExpenses]);
 
   const bankLedger = React.useMemo(() => {
-    const inbound = (stats.allIncomes || []).map((inc: any) => ({
+    // 1. Get all actual logged incomes
+    const loggedInbounds = (stats.allIncomes || []).map((inc: any) => ({
       id: inc.id,
       type: 'inbound',
       description: inc.source,
-      amount: inc.amount,
-      date: inc.date,
+      amount: parseFloat(inc.amount) || 0,
+      date: inc.date || new Date().toISOString().split('T')[0],
       category: inc.category,
       notes: inc.notes || ''
     }));
 
-    const outbound = (stats.allExpenses || [])
-      .filter((exp: any) => exp.paidBy === 'bank')
-      .map((exp: any) => ({
-        id: exp.id,
-        type: 'outbound',
-        description: exp.description,
-        amount: exp.amount,
-        date: exp.date,
-        category: exp.category,
-        notes: exp.notes || ''
-      }));
+    // 2. Identify which active members' shares have NOT been logged as inbounds in the db
+    const price = globalSettings?.sharePrice ?? 10;
+    const virtualInbounds: any[] = [];
+    
+    (stats.members || []).forEach((m: any) => {
+      const mShares = parseFloat(m.shares) || 0;
+      if (mShares > 0) {
+        // Look for any logged income with their name in the source
+        const hasLogged = loggedInbounds.some(inc => 
+          inc.description.toLowerCase().includes(m.name.toLowerCase()) && 
+          (inc.description.toLowerCase().includes('share') || inc.notes.toLowerCase().includes('share'))
+        );
+        if (!hasLogged) {
+          virtualInbounds.push({
+            id: `virtual-share-${m.id}`,
+            type: 'inbound',
+            description: `Share Capital: ${m.name} (${mShares} Units)`,
+            amount: mShares * price,
+            date: m.joinedAt ? new Date(m.joinedAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+            category: 'Shares',
+            notes: 'Dynamically reconciled active share investment'
+          });
+        }
+      }
+    });
 
-    return [...inbound, ...outbound]
+    // 3. Get all outbound bank expenses
+    const outbound = (stats.allExpenses || [])
+       .filter((exp: any) => exp.paidBy === 'bank')
+       .map((exp: any) => ({
+         id: exp.id,
+         type: 'outbound',
+         description: exp.description,
+         amount: parseFloat(exp.amount) || 0,
+         date: exp.date,
+         category: exp.category,
+         notes: exp.notes || ''
+       }));
+
+    return [...loggedInbounds, ...virtualInbounds, ...outbound]
       .sort((a, b) => {
         const timeA = a.date ? new Date(a.date).getTime() : 0;
         const timeB = b.date ? new Date(b.date).getTime() : 0;
         return timeB - timeA;
       });
-  }, [stats.allIncomes, stats.allExpenses]);
+  }, [stats.allIncomes, stats.allExpenses, stats.members, globalSettings]);
 
 
 
@@ -651,8 +699,7 @@ export function Dashboard() {
         const sharePrice = globalSettings?.sharePrice ?? 10;
         const totalOnboardingShares = (stats.onboarding || []).reduce((sum, item) => sum + (parseFloat(item.shares) || 0), 0);
         const expectedShareSale = totalOnboardingShares * sharePrice;
-        const totalIncome = (stats.allIncomes || []).reduce((sum, inc: any) => sum + (parseFloat(inc.amount) || 0), 0);
-        const netCashflow = totalIncome - stats.totalSpent;
+        const netCashflow = dynamicTotalIncome - stats.totalSpent;
         return (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
             <StatCard 
@@ -690,7 +737,7 @@ export function Dashboard() {
             />
             <StatCard 
               title="Total Income" 
-              value={`₹${totalIncome.toLocaleString()}`} 
+              value={`₹${dynamicTotalIncome.toLocaleString()}`} 
               icon={<Wallet className="w-5 h-5" />} 
               color="bg-emerald-500/10 text-emerald-500"
             />
