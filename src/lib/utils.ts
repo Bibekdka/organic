@@ -577,19 +577,19 @@ export function calculateSettlements(members: any[], expenses: any[]) {
 
   const balances: Record<string, number> = {};
   members.forEach(m => balances[m.id] = 0);
+  balances['bank'] = 0;
 
   expenses.forEach((expense: any) => {
-    // Ignore expenses paid by the collective bank account in peer-to-peer settlements
-    if (expense.paidBy !== 'bank') {
-      if (balances[expense.paidBy] !== undefined) {
-        balances[expense.paidBy] = (balances[expense.paidBy] || 0) + (expense.amount || 0);
-      }
-      expense.splits?.forEach((split: any) => {
-        if (balances[split.memberId] !== undefined) {
-          balances[split.memberId] = (balances[split.memberId] || 0) - (split.amount || 0);
-        }
-      });
+    const payer = expense.paidBy || 'bank';
+    if (balances[payer] !== undefined) {
+      balances[payer] = (balances[payer] || 0) + (expense.amount || 0);
     }
+    expense.splits?.forEach((split: any) => {
+      const targetId = split.memberId || 'bank';
+      if (balances[targetId] !== undefined) {
+        balances[targetId] = (balances[targetId] || 0) - (split.amount || 0);
+      }
+    });
   });
 
   const debtors = Object.entries(balances)

@@ -4,7 +4,8 @@ import {
   Wallet, 
   ArrowRight,
   CheckCircle2,
-  Loader2
+  Loader2,
+  PiggyBank
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -30,14 +31,14 @@ export function SettlementsPage() {
   const [isSettling, setIsSettling] = React.useState<Record<number, boolean>>({});
 
   const handleRecordSettlement = async (s: Settlement, index: number) => {
-    const debtorMember = members.find(m => m.id === s.from);
-    const creditorMember = members.find(m => m.id === s.to);
+    const debtorMember = s.from === 'bank' ? { name: 'Collective Bank Account', id: 'bank' } : members.find(m => m.id === s.from);
+    const creditorMember = s.to === 'bank' ? { name: 'Collective Bank Account', id: 'bank' } : members.find(m => m.id === s.to);
     if (!debtorMember || !creditorMember) return;
 
     setIsSettling(prev => ({ ...prev, [index]: true }));
     try {
       await addDoc(collection(db, 'expenses'), {
-        description: `Cooperative Debt Clearance: ${debtorMember.name} settled up with ${creditorMember.name}`,
+        description: `Debt Clearance: ${debtorMember.name} settled up with ${creditorMember.name}`,
         amount: parseFloat(s.amount.toFixed(2)),
         date: new Date().toISOString().split('T')[0],
         category: 'Settlement',
@@ -111,6 +112,32 @@ export function SettlementsPage() {
           </CardHeader>
           <CardContent>
              <div className="space-y-4">
+               {/* 🏦 Collective Bank Account Balance Row */}
+               {(() => {
+                 const balance = calculations.balances['bank'] || 0;
+                 return (
+                   <div className="flex items-center justify-between p-3.5 rounded-lg bg-emerald-500/5 border border-emerald-500/10 hover:border-emerald-500/20 transition-all">
+                      <div className="flex items-center gap-3">
+                         <div className="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-500 font-bold">
+                            <PiggyBank className="w-5 h-5" />
+                         </div>
+                         <div>
+                            <p className="text-sm font-bold text-foreground">🏦 Collective Bank Account</p>
+                            <p className="text-[10px] text-muted-foreground uppercase">Virtual Clearance Hub</p>
+                         </div>
+                      </div>
+                      <div className="text-right">
+                         <p className={`text-sm font-black ${balance >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                            {balance >= 0 ? '+' : ''}₹{balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                         </p>
+                         <p className="text-[10px] text-muted-foreground">
+                            {balance >= 0 ? 'Owed to the Bank' : 'Bank owes members'}
+                         </p>
+                      </div>
+                   </div>
+                 );
+               })()}
+
                {members.map(member => {
                  const balance = calculations.balances[member.id] || 0;
                  return (
@@ -154,7 +181,9 @@ export function SettlementsPage() {
                     <div className="flex items-center justify-between gap-4">
                        <div className="flex-1 space-y-1">
                           <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-tighter">From</p>
-                          <p className="text-sm font-bold text-foreground truncate">{members.find(m => m.id === s.from)?.name || `User (${s.from.substring(0, 5)}...)`}</p>
+                          <p className="text-sm font-bold text-foreground truncate">
+                             {s.from === 'bank' ? '🏦 Collective Bank' : (members.find(m => m.id === s.from)?.name || `User (${s.from.substring(0, 5)}...)`)}
+                          </p>
                        </div>
                        
                        <div className="flex flex-col items-center gap-1 shrink-0">
@@ -168,7 +197,9 @@ export function SettlementsPage() {
 
                        <div className="flex-1 space-y-1 text-right">
                           <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-tighter">To</p>
-                          <p className="text-sm font-bold text-foreground truncate">{members.find(m => m.id === s.to)?.name || `User (${s.to.substring(0, 5)}...)`}</p>
+                          <p className="text-sm font-bold text-foreground truncate">
+                             {s.to === 'bank' ? '🏦 Collective Bank' : (members.find(m => m.id === s.to)?.name || `User (${s.to.substring(0, 5)}...)`)}
+                          </p>
                        </div>
                     </div>
                     <Button 

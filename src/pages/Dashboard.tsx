@@ -377,21 +377,9 @@ export function Dashboard() {
   };
 
   const memberBalances = React.useMemo(() => {
-    const balances: Record<string, number> = {};
-    stats.members.forEach(m => balances[m.id] = 0);
-    stats.allExpenses.forEach((expense: any) => {
-      if (expense.paidBy !== 'bank') {
-        if (balances[expense.paidBy] !== undefined) {
-          balances[expense.paidBy] = (balances[expense.paidBy] || 0) + (expense.amount || 0);
-        }
-        expense.splits?.forEach((split: any) => {
-          if (balances[split.memberId] !== undefined) {
-            balances[split.memberId] = (balances[split.memberId] || 0) - (split.amount || 0);
-          }
-        });
-      }
-    });
+    const { balances } = calculateSettlements(stats.members, stats.allExpenses);
     return Object.entries(balances)
+      .filter(([id]) => id !== 'bank')
       .map(([id, balance]) => ({
         id,
         name: stats.members.find(m => m.id === id)?.name || `User (${id.substring(0, 5)}...)`,
