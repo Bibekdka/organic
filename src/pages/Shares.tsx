@@ -241,6 +241,40 @@ export function SharesPage() {
         createdByName: auth.currentUser?.displayName || auth.currentUser?.email?.split('@')[0] || 'Unknown'
       });
 
+      // 3. Keep Income/Expense ledger in sync for financial reports and profit calculations
+      if (buySellType === 'buy') {
+        await addDoc(collection(db, 'incomes'), {
+          source: `Share Purchase: ${member.name}`,
+          amount: amount * sharePrice,
+          category: 'Sales',
+          date: new Date().toISOString().split('T')[0],
+          notes: `Member Share Purchase of ${amount} units @ ₹${sharePrice}/unit`,
+          createdAt: Date.now(),
+          createdBy: auth.currentUser?.uid || 'Unknown',
+          createdByName: auth.currentUser?.displayName || auth.currentUser?.email?.split('@')[0] || 'Unknown',
+          createdByDevice: 'Web Browser'
+        });
+      } else {
+        await addDoc(collection(db, 'expenses'), {
+          description: `Share Buyback: Refund to ${member.name}`,
+          amount: amount * sharePrice,
+          date: new Date().toISOString().split('T')[0],
+          category: 'Settlement',
+          paidBy: buySellMemberId,
+          splitType: 'custom',
+          splits: [
+            {
+              memberId: buySellMemberId,
+              amount: amount * sharePrice
+            }
+          ],
+          createdAt: serverTimestamp(),
+          createdByName: auth.currentUser?.displayName || auth.currentUser?.email?.split('@')[0] || 'System',
+          createdByEmail: auth.currentUser?.email || '',
+          isRecurring: false
+        });
+      }
+
       toast.success(
         buySellType === 'buy'
           ? `Successfully purchased ${amount} shares for ${member.name}`

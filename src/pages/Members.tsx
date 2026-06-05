@@ -52,7 +52,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { collection, onSnapshot, query, addDoc, serverTimestamp, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { Member, Expense, OnboardingRecord } from '@/types';
+import { Member, Expense, OnboardingRecord, AppSettings } from '@/types';
 import { toast } from 'sonner';
 import { cn, getUserAttribution } from '@/lib/utils';
 import { handleFirestoreError, OperationType } from '@/lib/firestore-errors';
@@ -69,6 +69,7 @@ export function MembersPage() {
   const [onboarding, setOnboarding] = React.useState<OnboardingRecord[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [activeTab, setActiveTab] = React.useState('active');
+  const [settings, setSettings] = React.useState<AppSettings | null>(null);
 
   React.useEffect(() => {
     const unsubMem = onSnapshot(query(collection(db, 'members')), (snapshot) => {
@@ -84,12 +85,23 @@ export function MembersPage() {
       setLoading(false);
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'onboarding'));
 
+    const unsubSettings = onSnapshot(doc(db, 'settings', 'global'), (snapshot) => {
+      if (snapshot.exists()) {
+        setSettings({ id: snapshot.id, ...snapshot.data() } as AppSettings);
+      } else {
+        setSettings({ id: 'global', sharePrice: 10, updatedAt: Date.now() });
+      }
+    }, (error) => handleFirestoreError(error, OperationType.GET, 'settings/global'));
+
     return () => {
       unsubMem();
       unsubExp();
       unsubOnboarding();
+      unsubSettings();
     };
   }, []);
+
+  const sharePrice = settings?.sharePrice || 100;
 
   const contributions = React.useMemo(() => {
     const stats: Record<string, number> = {};
@@ -120,7 +132,7 @@ export function MembersPage() {
     setNewShares(val);
     const numeric = parseFloat(val);
     if (!isNaN(numeric)) {
-      setNewSharesRupees((numeric * 10).toString());
+      setNewSharesRupees((numeric * sharePrice).toString());
     } else {
       setNewSharesRupees('');
     }
@@ -130,11 +142,20 @@ export function MembersPage() {
     setNewSharesRupees(val);
     const numeric = parseFloat(val);
     if (!isNaN(numeric)) {
-      setNewShares((numeric / 10).toString());
+      setNewShares((numeric / sharePrice).toString());
     } else {
       setNewShares('');
     }
   };
+
+  React.useEffect(() => {
+    if (settings?.sharePrice) {
+      const numericShares = parseFloat(newShares);
+      if (!isNaN(numericShares)) {
+        setNewSharesRupees((numericShares * settings.sharePrice).toString());
+      }
+    }
+  }, [settings?.sharePrice]);
   const [newGender, setNewGender] = React.useState<'male' | 'female' | 'other'>('male');
   const [newDob, setNewDob] = React.useState('');
   const [newAadharNo, setNewAadharNo] = React.useState('');
@@ -338,7 +359,7 @@ export function MembersPage() {
     setNewNotes(record.notes || '');
     const currentShares = record.shares ?? 10;
     setNewShares(currentShares.toString());
-    setNewSharesRupees((currentShares * 10).toString());
+    setNewSharesRupees((currentShares * sharePrice).toString());
     setIsEditOnboardingOpen(true);
   };
 
@@ -381,7 +402,7 @@ export function MembersPage() {
     setNewName('');
     setNewEmail('');
     setNewShares('10');
-    setNewSharesRupees('100');
+    setNewSharesRupees((10 * sharePrice).toString());
     setNewRole('member');
     setNewGender('male');
     setNewDob('');
@@ -1133,7 +1154,7 @@ export function MembersPage() {
                                 {record.shares ?? 0} Shares
                              </p>
                              <p className="text-[10px] text-muted-foreground font-mono">
-                                ₹{(record.shares ?? 0) * 10} (@ ₹10/sh)
+                                ₹{(record.shares ?? 0) * sharePrice} (@ ₹{sharePrice}/sh)
                              </p>
                           </div>
                        </div>
@@ -1516,7 +1537,7 @@ export function MembersPage() {
               <div className="grid gap-2">
                 <label className="text-sm font-medium text-foreground flex items-center justify-between">
                   <span>Planned Shares (Units)</span>
-                  <span className="text-[10px] text-muted-foreground font-semibold">1 share = ₹10</span>
+                  <span className="text-[10px] text-muted-foreground font-semibold">1 share = ₹{sharePrice}</span>
                 </label>
                 <Input 
                   type="number" 
@@ -1658,7 +1679,7 @@ export function MembersPage() {
               <div className="grid gap-2">
                 <label className="text-sm font-medium text-foreground flex items-center justify-between">
                   <span>Planned Shares (Units)</span>
-                  <span className="text-[10px] text-muted-foreground font-semibold">1 share = ₹10</span>
+                  <span className="text-[10px] text-muted-foreground font-semibold">1 share = ₹{sharePrice}</span>
                 </label>
                 <Input 
                   type="number" 
@@ -1810,7 +1831,7 @@ export function MembersPage() {
               <div className="grid gap-2">
                 <label className="text-sm font-medium text-foreground flex items-center justify-between">
                   <span>Shares (Units)</span>
-                  <span className="text-[10px] text-muted-foreground font-semibold">1 share = ₹10</span>
+                  <span className="text-[10px] text-muted-foreground font-semibold">1 share = ₹{sharePrice}</span>
                 </label>
                 <Input 
                   type="number" 
