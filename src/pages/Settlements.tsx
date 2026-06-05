@@ -14,6 +14,7 @@ import { Member } from '@/types';
 import { handleFirestoreError, OperationType } from '@/lib/firestore-errors';
 import { useAuthStore } from '@/store/useAuthStore';
 import { toast } from 'sonner';
+import { calculateSettlements } from '@/lib/utils';
 
 interface Settlement {
   from: string;
@@ -81,57 +82,7 @@ export function SettlementsPage() {
   }, []);
 
   const calculations = React.useMemo(() => {
-    if (members.length === 0) return { balances: {}, settlements: [] };
-
-    // Calculate net balance for each member
-    // balance > 0 means the member is owed money
-    // balance < 0 means the member owes money
-    const balances: Record<string, number> = {};
-    members.forEach(m => balances[m.id] = 0);
-
-    expenses.forEach((expense: any) => {
-      // 1. Payer gets credit for the full amount
-      balances[expense.paidBy] = (balances[expense.paidBy] || 0) + expense.amount;
-
-      // 2. Each member in the split owes their portion
-      expense.splits?.forEach((split: any) => {
-        balances[split.memberId] = (balances[split.memberId] || 0) - split.amount;
-      });
-    });
-
-    // Simplify settlements
-    const debtors = Object.entries(balances)
-      .filter(([, bal]) => bal < -0.01)
-      .sort((a, b) => a[1] - b[1]); // Most negative first
-    
-    const creditors = Object.entries(balances)
-      .filter(([, bal]) => bal > 0.01)
-      .sort((a, b) => b[1] - a[1]); // Most positive first
-
-    const settlements: Settlement[] = [];
-    let dIdx = 0;
-    let cIdx = 0;
-
-    const tempDebtors = debtors.map(d => ({ id: d[0], amount: Math.abs(d[1]) }));
-    const tempCreditors = creditors.map(c => ({ id: c[0], amount: c[1] }));
-
-    while (dIdx < tempDebtors.length && cIdx < tempCreditors.length) {
-      const debtor = tempDebtors[dIdx];
-      const creditor = tempCreditors[cIdx];
-      const amount = Math.min(debtor.amount, creditor.amount);
-
-      if (amount > 0.01) {
-        settlements.push({ from: debtor.id, to: creditor.id, amount });
-      }
-
-      debtor.amount -= amount;
-      creditor.amount -= amount;
-
-      if (debtor.amount < 0.01) dIdx++;
-      if (creditor.amount < 0.01) cIdx++;
-    }
-
-    return { balances, settlements };
+    return calculateSettlements(members, expenses);
   }, [members, expenses]);
 
   if (loading) {

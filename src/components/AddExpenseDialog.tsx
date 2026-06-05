@@ -504,10 +504,11 @@ export function AddExpenseDialog({ open, onOpenChange, initialData }: AddExpense
                 <Select value={paidBy} onValueChange={setPaidBy}>
                   <SelectTrigger className="bg-background">
                     <SelectValue placeholder="Select Payer">
-                      {members.find(m => m.id === paidBy)?.name}
+                      {paidBy === 'bank' ? '🏦 Collective Bank Account' : members.find(m => m.id === paidBy)?.name}
                     </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="bank" className="font-semibold text-emerald-600">🏦 Collective Bank Account</SelectItem>
                     {members.map(m => (
                       <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
                     ))}

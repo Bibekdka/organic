@@ -261,7 +261,7 @@ export function Dashboard() {
       exp.description,
       `₹${exp.amount.toLocaleString()}`,
       exp.date,
-      stats.members.find(m => m.id === exp.paidBy)?.name || `User (${exp.paidBy.substring(0, 5)}...)`,
+      exp.paidBy === 'bank' ? '🏦 Collective Bank' : (stats.members.find(m => m.id === exp.paidBy)?.name || `User (${exp.paidBy.substring(0, 5)}...)`),
       exp.category
     ]);
 
@@ -367,7 +367,7 @@ export function Dashboard() {
       Description: exp.description,
       Amount: exp.amount,
       Date: exp.date,
-      PaidBy: stats.members.find(m => m.id === exp.paidBy)?.name || `User (${exp.paidBy.substring(0, 5)}...)`,
+      PaidBy: exp.paidBy === 'bank' ? '🏦 Collective Bank' : (stats.members.find(m => m.id === exp.paidBy)?.name || `User (${exp.paidBy.substring(0, 5)}...)`),
       Category: exp.category,
       SplitType: exp.splitType
     })));
@@ -380,10 +380,16 @@ export function Dashboard() {
     const balances: Record<string, number> = {};
     stats.members.forEach(m => balances[m.id] = 0);
     stats.allExpenses.forEach((expense: any) => {
-      balances[expense.paidBy] = (balances[expense.paidBy] || 0) + expense.amount;
-      expense.splits?.forEach((split: any) => {
-        balances[split.memberId] = (balances[split.memberId] || 0) - split.amount;
-      });
+      if (expense.paidBy !== 'bank') {
+        if (balances[expense.paidBy] !== undefined) {
+          balances[expense.paidBy] = (balances[expense.paidBy] || 0) + (expense.amount || 0);
+        }
+        expense.splits?.forEach((split: any) => {
+          if (balances[split.memberId] !== undefined) {
+            balances[split.memberId] = (balances[split.memberId] || 0) - (split.amount || 0);
+          }
+        });
+      }
     });
     return Object.entries(balances)
       .map(([id, balance]) => ({
@@ -393,6 +399,45 @@ export function Dashboard() {
       }))
       .sort((a, b) => b.balance - a.balance);
   }, [stats.members, stats.allExpenses]);
+
+  const bankBalance = React.useMemo(() => {
+    const inboundTotal = (stats.allIncomes || []).reduce((sum, inc: any) => sum + (parseFloat(inc.amount) || 0), 0);
+    const outboundTotal = (stats.allExpenses || [])
+      .filter((exp: any) => exp.paidBy === 'bank')
+      .reduce((sum, exp: any) => sum + (parseFloat(exp.amount) || 0), 0);
+    return inboundTotal - outboundTotal;
+  }, [stats.allIncomes, stats.allExpenses]);
+
+  const bankLedger = React.useMemo(() => {
+    const inbound = (stats.allIncomes || []).map((inc: any) => ({
+      id: inc.id,
+      type: 'inbound',
+      description: inc.source,
+      amount: inc.amount,
+      date: inc.date,
+      category: inc.category,
+      notes: inc.notes || ''
+    }));
+
+    const outbound = (stats.allExpenses || [])
+      .filter((exp: any) => exp.paidBy === 'bank')
+      .map((exp: any) => ({
+        id: exp.id,
+        type: 'outbound',
+        description: exp.description,
+        amount: exp.amount,
+        date: exp.date,
+        category: exp.category,
+        notes: exp.notes || ''
+      }));
+
+    return [...inbound, ...outbound]
+      .sort((a, b) => {
+        const timeA = a.date ? new Date(a.date).getTime() : 0;
+        const timeB = b.date ? new Date(b.date).getTime() : 0;
+        return timeB - timeA;
+      });
+  }, [stats.allIncomes, stats.allExpenses]);
 
 
 
@@ -621,7 +666,7 @@ export function Dashboard() {
         const totalIncome = (stats.allIncomes || []).reduce((sum, inc: any) => sum + (parseFloat(inc.amount) || 0), 0);
         const netCashflow = totalIncome - stats.totalSpent;
         return (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
             <StatCard 
               title="Active Members" 
               value={stats.totalMembers.toString()} 
@@ -629,15 +674,27 @@ export function Dashboard() {
               color="bg-primary/10 text-primary"
             />
             <StatCard 
+              title="Bank Balance" 
+              value={`₹${(bankBalance / 1000).toFixed(bankBalance >= 1000 ? 1 : 2)}k`} 
+              icon={<PiggyBank className="w-5 h-5 text-emerald-500" />} 
+              color="bg-emerald-500/10 text-emerald-500"
+              trend={`₹${bankBalance.toLocaleString()}`}
+              trendType={bankBalance >= 0 ? "up" : "down"}
+              onClick={() => {
+                const element = document.getElementById('bank-ledger-section');
+                if (element) element.scrollIntoView({ behavior: 'smooth' });
+              }}
+            />
+            <StatCard 
               title="Total Spent" 
               value={`₹${(stats.totalSpent / 1000).toFixed(stats.totalSpent >= 1000 ? 1 : 2)}k`} 
-              icon={<Receipt className="w-5 h-5" />} 
-              color="bg-emerald-500/10 text-emerald-500"
+              icon={<Receipt className="w-5 h-5 animate-pulse" />} 
+              color="bg-rose-500/10 text-rose-500"
             />
             <StatCard 
               title="Expected Share Sale" 
               value={`₹${expectedShareSale.toLocaleString()}`} 
-              icon={<PiggyBank className="w-5 h-5" />} 
+              icon={<TrendingUp className="w-5 h-5" />} 
               color="bg-indigo-500/10 text-indigo-500 hover:bg-indigo-500/20"
               trend={`${totalOnboardingShares} Shares in Queue`}
               trendType="up"
@@ -1299,6 +1356,59 @@ export function Dashboard() {
                   <Bar dataKey="amount" fill="currentColor" radius={[4, 4, 0, 0]} className="fill-primary" />
                 </BarChart>
               </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* BANK LEDGER COMPONENT */}
+        <Card className="lg:col-span-1 border-none shadow-md bg-card/50 flex flex-col justify-between" id="bank-ledger-section">
+          <CardHeader className="pb-3 border-b border-white/5">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg flex items-center gap-2 text-foreground">
+                <PiggyBank className="w-5 h-5 text-emerald-500" />
+                Collective Bank Ledger
+              </CardTitle>
+              <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-none">
+                ₹{bankBalance.toLocaleString()}
+              </Badge>
+            </div>
+            <CardDescription>Direct bank inflows (sales/shares) & direct bank expenses.</CardDescription>
+          </CardHeader>
+          <CardContent className="p-4 flex-grow overflow-hidden">
+            <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1">
+              {bankLedger.map((item) => (
+                <div 
+                  key={item.id} 
+                  className="flex items-center justify-between p-2.5 rounded-lg bg-secondary/5 border border-transparent hover:border-emerald-500/10 transition-all text-xs animate-fadeIn"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className={cn(
+                      "w-7 h-7 rounded-full flex items-center justify-center shrink-0 shadow-sm",
+                      item.type === 'inbound' ? "bg-emerald-500/10 text-emerald-500" : "bg-rose-500/10 text-rose-500"
+                    )}>
+                      {item.type === 'inbound' ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownRight className="w-4 h-4" />}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-semibold text-foreground truncate">{item.description}</p>
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-widest">{item.category} • {item.date}</p>
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className={cn(
+                      "font-black text-sm",
+                      item.type === 'inbound' ? "text-emerald-500" : "text-rose-500"
+                    )}>
+                      {item.type === 'inbound' ? '+' : '-'}₹{item.amount.toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+              ))}
+              {bankLedger.length === 0 && (
+                <div className="py-12 text-center text-muted-foreground">
+                  <PiggyBank className="w-10 h-10 mx-auto mb-2 opacity-10 animate-bounce" />
+                  <p className="text-xs">No bank movements recorded yet.</p>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
