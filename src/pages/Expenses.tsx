@@ -72,6 +72,8 @@ export function ExpensesPage() {
   const [expenseList, setExpenseList] = React.useState<any[]>([]);
   const [recurringTemplates, setRecurringTemplates] = React.useState<any[]>([]);
   const [members, setMembers] = React.useState<Member[]>([]);
+  const [incomes, setIncomes] = React.useState<any[]>([]);
+  const [settings, setSettings] = React.useState<any>(null);
   const [loading, setLoading] = React.useState(true);
   const [activeTab, setActiveTab] = React.useState('all');
   
@@ -90,7 +92,6 @@ export function ExpensesPage() {
     const qExp = query(collection(db, 'expenses'), orderBy('createdAt', 'desc'));
     const unsubExp = onSnapshot(qExp, (snapshot) => {
       setExpenseList(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
-      setLoading(false);
     }, (err) => handleFirestoreError(err, OperationType.LIST, 'expenses'));
 
     // Listen to Recurring Templates
@@ -99,17 +100,32 @@ export function ExpensesPage() {
       setRecurringTemplates(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
     }, (err) => handleFirestoreError(err, OperationType.LIST, 'recurring_templates'));
 
-      // Listen to Members
+    // Listen to Members
     const qMem = query(collection(db, 'members'));
     const unsubMem = onSnapshot(qMem, (snapshot) => {
       const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Member));
       setMembers(list);
     }, (err) => handleFirestoreError(err, OperationType.LIST, 'members'));
 
+    // Listen to Incomes
+    const unsubInc = onSnapshot(collection(db, 'incomes'), (snapshot) => {
+      setIncomes(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+      setLoading(false);
+    }, (err) => handleFirestoreError(err, OperationType.LIST, 'incomes'));
+
+    // Listen to Settings
+    const unsubSettings = onSnapshot(doc(db, 'settings', 'global'), (snapshot) => {
+      if (snapshot.exists()) {
+        setSettings(snapshot.data());
+      }
+    });
+
     return () => {
       unsubExp();
       unsubRec();
       unsubMem();
+      unsubInc();
+      unsubSettings();
     };
   }, []);
 
@@ -136,7 +152,8 @@ export function ExpensesPage() {
       headStyles: { fillColor: [79, 70, 229] }
     });
 
-    const { balances, settlements } = calculateSettlements(members, expenseList);
+    const sharePrice = settings?.sharePrice ?? 10;
+    const { balances, settlements } = calculateSettlements(members, expenseList, incomes, sharePrice);
 
     // Identify current user's member object
     const myMember = members.find(

@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { collection, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, serverTimestamp, doc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Member } from '@/types';
 import { handleFirestoreError, OperationType } from '@/lib/firestore-errors';
@@ -27,6 +27,8 @@ export function SettlementsPage() {
   const { user } = useAuthStore();
   const [members, setMembers] = React.useState<Member[]>([]);
   const [expenses, setExpenses] = React.useState<any[]>([]);
+  const [incomes, setIncomes] = React.useState<any[]>([]);
+  const [settings, setSettings] = React.useState<any>(null);
   const [loading, setLoading] = React.useState(true);
   const [isSettling, setIsSettling] = React.useState<Record<number, boolean>>({});
 
@@ -73,18 +75,33 @@ export function SettlementsPage() {
     // Listen to Expenses
     const unsubExp = onSnapshot(collection(db, 'expenses'), (snapshot) => {
       setExpenses(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
-      setLoading(false);
     }, (err) => handleFirestoreError(err, OperationType.LIST, 'expenses'));
+
+    // Listen to Incomes
+    const unsubInc = onSnapshot(collection(db, 'incomes'), (snapshot) => {
+      setIncomes(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+      setLoading(false);
+    }, (err) => handleFirestoreError(err, OperationType.LIST, 'incomes'));
+
+    // Listen to Settings
+    const unsubSettings = onSnapshot(doc(db, 'settings', 'global'), (snapshot) => {
+      if (snapshot.exists()) {
+        setSettings(snapshot.data());
+      }
+    });
 
     return () => {
       unsubMem();
       unsubExp();
+      unsubInc();
+      unsubSettings();
     };
   }, []);
 
   const calculations = React.useMemo(() => {
-    return calculateSettlements(members, expenses);
-  }, [members, expenses]);
+    const sharePrice = settings?.sharePrice ?? 10;
+    return calculateSettlements(members, expenses, incomes, sharePrice);
+  }, [members, expenses, incomes, settings]);
 
   if (loading) {
     return (

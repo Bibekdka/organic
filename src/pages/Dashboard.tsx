@@ -273,7 +273,8 @@ export function Dashboard() {
       headStyles: { fillColor: [79, 70, 229] }
     });
 
-    const { balances, settlements } = calculateSettlements(stats.members, stats.allExpenses);
+    const sharePrice = globalSettings?.sharePrice ?? 10;
+    const { balances, settlements } = calculateSettlements(stats.members, stats.allExpenses, stats.allIncomes, sharePrice);
 
     // Identify current user's member object
     const myMember = stats.members.find(
@@ -377,7 +378,8 @@ export function Dashboard() {
   };
 
   const memberBalances = React.useMemo(() => {
-    const { balances } = calculateSettlements(stats.members, stats.allExpenses);
+    const sharePrice = globalSettings?.sharePrice ?? 10;
+    const { balances } = calculateSettlements(stats.members, stats.allExpenses, stats.allIncomes, sharePrice);
     return Object.entries(balances)
       .filter(([id]) => id !== 'bank')
       .map(([id, balance]) => ({
@@ -386,28 +388,11 @@ export function Dashboard() {
         balance
       }))
       .sort((a, b) => b.balance - a.balance);
-  }, [stats.members, stats.allExpenses]);
-
-  const isSharePurchase = (inc: any) => {
-    const src = (inc.source || '').toLowerCase();
-    const cat = (inc.category || '').toLowerCase();
-    const n = (inc.notes || '').toLowerCase();
-    return src.includes('share purchase') || cat.includes('shares') || cat.includes('sales') && src.includes('share') || n.includes('share purchase') || n.includes('initial share purchase');
-  };
-
-  const liveSharesIncome = React.useMemo(() => {
-    const price = globalSettings?.sharePrice ?? 10;
-    return (stats.members || []).reduce((sum, m: any) => sum + (parseFloat(m.shares) || 0), 0) * price;
-  }, [stats.members, globalSettings]);
-
-  const nonShareIncomes = React.useMemo(() => {
-    return (stats.allIncomes || []).filter((inc: any) => !isSharePurchase(inc));
-  }, [stats.allIncomes]);
+  }, [stats.members, stats.allExpenses, stats.allIncomes, globalSettings]);
 
   const dynamicTotalIncome = React.useMemo(() => {
-    const nonShareTotal = nonShareIncomes.reduce((sum, inc: any) => sum + (parseFloat(inc.amount) || 0), 0);
-    return nonShareTotal + liveSharesIncome;
-  }, [nonShareIncomes, liveSharesIncome]);
+    return (stats.allIncomes || []).reduce((sum, inc: any) => sum + (parseFloat(inc.amount) || 0), 0);
+  }, [stats.allIncomes]);
 
   const bankBalance = React.useMemo(() => {
     const outboundTotal = (stats.allExpenses || [])
@@ -428,33 +413,7 @@ export function Dashboard() {
       notes: inc.notes || ''
     }));
 
-    // 2. Identify which active members' shares have NOT been logged as inbounds in the db
-    const price = globalSettings?.sharePrice ?? 10;
-    const virtualInbounds: any[] = [];
-    
-    (stats.members || []).forEach((m: any) => {
-      const mShares = parseFloat(m.shares) || 0;
-      if (mShares > 0) {
-        // Look for any logged income with their name in the source
-        const hasLogged = loggedInbounds.some(inc => 
-          inc.description.toLowerCase().includes(m.name.toLowerCase()) && 
-          (inc.description.toLowerCase().includes('share') || inc.notes.toLowerCase().includes('share'))
-        );
-        if (!hasLogged) {
-          virtualInbounds.push({
-            id: `virtual-share-${m.id}`,
-            type: 'inbound',
-            description: `Share Capital: ${m.name} (${mShares} Units)`,
-            amount: mShares * price,
-            date: m.joinedAt ? new Date(m.joinedAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-            category: 'Shares',
-            notes: 'Dynamically reconciled active share investment'
-          });
-        }
-      }
-    });
-
-    // 3. Get all outbound bank expenses
+    // 2. Get all outbound bank expenses
     const outbound = (stats.allExpenses || [])
        .filter((exp: any) => exp.paidBy === 'bank')
        .map((exp: any) => ({
@@ -467,13 +426,13 @@ export function Dashboard() {
          notes: exp.notes || ''
        }));
 
-    return [...loggedInbounds, ...virtualInbounds, ...outbound]
+    return [...loggedInbounds, ...outbound]
       .sort((a, b) => {
         const timeA = a.date ? new Date(a.date).getTime() : 0;
         const timeB = b.date ? new Date(b.date).getTime() : 0;
         return timeB - timeA;
       });
-  }, [stats.allIncomes, stats.allExpenses, stats.members, globalSettings]);
+  }, [stats.allIncomes, stats.allExpenses]);
 
 
 

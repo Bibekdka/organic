@@ -572,25 +572,60 @@ export interface Settlement {
   amount: number;
 }
 
-export function calculateSettlements(members: any[], expenses: any[]) {
+export function calculateSettlements(members: any[], expenses: any[], incomes: any[] = [], _sharePrice: number = 10) {
+  void _sharePrice;
   if (members.length === 0) return { balances: {} as Record<string, number>, settlements: [] as Settlement[] };
 
   const balances: Record<string, number> = {};
-  members.forEach(m => balances[m.id] = 0);
+  members.forEach(m => {
+    balances[m.id] = 0;
+  });
   balances['bank'] = 0;
 
+  // 1. Calculate total cooperative income directly from real logged incomes in the database
+  const totalCoopIncome = incomes.reduce((sum, inc: any) => sum + (parseFloat(inc.amount) || 0), 0);
+
+  let totalCoopExpense = 0;
+
+  // 2. Process Expenses
   expenses.forEach((expense: any) => {
-    const payer = expense.paidBy || 'bank';
-    if (balances[payer] !== undefined) {
-      balances[payer] = (balances[payer] || 0) + (expense.amount || 0);
-    }
-    expense.splits?.forEach((split: any) => {
-      const targetId = split.memberId || 'bank';
-      if (balances[targetId] !== undefined) {
-        balances[targetId] = (balances[targetId] || 0) - (split.amount || 0);
+    const amount = parseFloat(expense.amount) || 0;
+    const isSettlement = (expense.category || '').toLowerCase() === 'settlement';
+
+    if (isSettlement) {
+      // Settlements are direct balance transfers
+      const payer = expense.paidBy || 'bank';
+      if (balances[payer] !== undefined) {
+        balances[payer] = (balances[payer] || 0) + amount;
       }
-    });
+      expense.splits?.forEach((split: any) => {
+        const targetId = split.memberId || 'bank';
+        if (balances[targetId] !== undefined) {
+          balances[targetId] = (balances[targetId] || 0) - (split.amount || 0);
+        }
+      });
+    } else {
+      // Real cooperative expense
+      totalCoopExpense += amount;
+      const payer = expense.paidBy || 'bank';
+      if (balances[payer] !== undefined) {
+        balances[payer] = (balances[payer] || 0) + amount;
+      }
+    }
   });
+
+  // 3. Apply the equal split rule for total coop income and total coop expense
+  const n = members.length;
+  const expensePerPerson = totalCoopExpense / n;
+  const incomePerPerson = totalCoopIncome / n;
+
+  // Each active member gets their share of total income and total expense
+  members.forEach(m => {
+    balances[m.id] = (balances[m.id] || 0) + (incomePerPerson - expensePerPerson);
+  });
+
+  // The Collective Bank holds the total incomes, so it receives a debit of totalCoopIncome
+  balances['bank'] = (balances['bank'] || 0) - totalCoopIncome;
 
   const debtors = Object.entries(balances)
     .filter(([, bal]) => bal < -0.01)
