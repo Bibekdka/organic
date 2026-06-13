@@ -395,23 +395,28 @@ export function Dashboard() {
   }, [stats.allIncomes]);
 
   const bankBalance = React.useMemo(() => {
+    const inboundTotal = (stats.allIncomes || [])
+      .filter((inc: any) => inc.submittedToBank !== false && inc.submittedToBank !== 'no')
+      .reduce((sum, inc: any) => sum + (parseFloat(inc.amount) || 0), 0);
     const outboundTotal = (stats.allExpenses || [])
       .filter((exp: any) => exp.paidBy === 'bank')
       .reduce((sum, exp: any) => sum + (parseFloat(exp.amount) || 0), 0);
-    return dynamicTotalIncome - outboundTotal;
-  }, [dynamicTotalIncome, stats.allExpenses]);
+    return inboundTotal - outboundTotal;
+  }, [stats.allIncomes, stats.allExpenses]);
 
   const bankLedger = React.useMemo(() => {
-    // 1. Get all actual logged incomes
-    const loggedInbounds = (stats.allIncomes || []).map((inc: any) => ({
-      id: inc.id,
-      type: 'inbound',
-      description: inc.source,
-      amount: parseFloat(inc.amount) || 0,
-      date: inc.date || new Date().toISOString().split('T')[0],
-      category: inc.category,
-      notes: inc.notes || ''
-    }));
+    // 1. Get all actual logged incomes submitted to the bank
+    const loggedInbounds = (stats.allIncomes || [])
+      .filter((inc: any) => inc.submittedToBank !== false && inc.submittedToBank !== 'no')
+      .map((inc: any) => ({
+        id: inc.id,
+        type: 'inbound',
+        description: inc.source,
+        amount: parseFloat(inc.amount) || 0,
+        date: inc.date || new Date().toISOString().split('T')[0],
+        category: inc.category,
+        notes: inc.notes || ''
+      }));
 
     // 2. Get all outbound bank expenses
     const outbound = (stats.allExpenses || [])

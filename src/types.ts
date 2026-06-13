@@ -110,6 +110,7 @@ export type Income = {
   createdBy: string;
   createdByName?: string;
   updatedByName?: string;
+  submittedToBank?: boolean;
 };
 
 export type Task = {

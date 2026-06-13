@@ -78,6 +78,7 @@ export function IncomesPage() {
   const [date, setDate] = React.useState(new Date().toISOString().split('T')[0]);
   const [notes, setNotes] = React.useState('');
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [submittedToBank, setSubmittedToBank] = React.useState<'yes' | 'no'>('yes');
 
   React.useEffect(() => {
     const q = query(collection(db, 'incomes'), orderBy('date', 'desc'));
@@ -104,6 +105,7 @@ export function IncomesPage() {
         category,
         date,
         notes,
+        submittedToBank: submittedToBank === 'yes',
         createdAt: Date.now(),
         createdBy: attr.userId,
         createdByName: attr.userName,
@@ -125,6 +127,7 @@ export function IncomesPage() {
     setCategory('Sales');
     setDate(new Date().toISOString().split('T')[0]);
     setNotes('');
+    setSubmittedToBank('yes');
   };
 
   const deleteIncome = async (id: string) => {
@@ -262,9 +265,20 @@ export function IncomesPage() {
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-100 text-[9px] uppercase font-bold py-0">
-                      {income.category}
-                    </Badge>
+                    <div className="flex flex-col gap-1">
+                      <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-100 text-[9px] uppercase font-bold py-0 self-start">
+                        {income.category}
+                      </Badge>
+                      {income.submittedToBank === false ? (
+                        <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-100 text-[8px] uppercase font-black py-0 px-1.5 self-start">
+                          Offline Cash
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-100 text-[8px] uppercase font-black py-0 px-1.5 self-start">
+                          🏦 Submitted to Bank
+                        </Badge>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell className="text-center font-mono text-xs text-muted-foreground">
                     {income.date}
@@ -309,13 +323,22 @@ export function IncomesPage() {
               <div className="flex items-start justify-between">
                 <div>
                   <h4 className="text-sm font-bold text-foreground leading-tight mb-1">{income.source}</h4>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-1.5 items-center mt-1">
                     <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-100 text-[8px] uppercase font-bold py-0">
                       {income.category}
                     </Badge>
-                    <span className="text-[10px] text-muted-foreground mt-0.5">{income.date}</span>
+                    {income.submittedToBank === false ? (
+                      <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-100 text-[8px] uppercase font-bold py-0">
+                        Offline Cash
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-100 text-[8px] uppercase font-bold py-0">
+                        🏦 In Bank
+                      </Badge>
+                    )}
+                    <span className="text-[10px] text-muted-foreground">{income.date}</span>
                     {income.createdByName && (
-                      <span className="text-[9px] text-primary font-black uppercase italic mt-0.5 ml-1">By {income.createdByName}</span>
+                      <span className="text-[9px] text-primary font-black uppercase italic ml-1">By {income.createdByName}</span>
                     )}
                   </div>
                 </div>
@@ -399,6 +422,20 @@ export function IncomesPage() {
                 onChange={(e) => setNotes(e.target.value)}
                 className="text-foreground"
               />
+            </div>
+            <div className="grid gap-2">
+              <label className="text-xs font-black uppercase text-muted-foreground flex items-center gap-1.5">
+                🏦 Submitted to Bank?
+              </label>
+              <Select value={submittedToBank} onValueChange={(v: 'yes' | 'no') => setSubmittedToBank(v)}>
+                <SelectTrigger className="font-bold text-foreground bg-background">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="yes" className="font-bold text-emerald-600">Yes (Debited to Collective Bank Account)</SelectItem>
+                  <SelectItem value="no" className="font-bold text-rose-500">No (Keep as cash/handover - does not put up to bank)</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
           <DialogFooter>

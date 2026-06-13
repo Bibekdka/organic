@@ -97,6 +97,7 @@ export function AddExpenseDialog({ open, onOpenChange, initialData }: AddExpense
   const [manualSplits, setManualSplits] = React.useState<Record<string, number>>({});
   const [transactionType, setTransactionType] = React.useState<'expense' | 'income'>('expense');
   const [incomeNotes, setIncomeNotes] = React.useState('');
+  const [submittedToBank, setSubmittedToBank] = React.useState<'yes' | 'no'>('yes');
 
   // Dynamic Categories and Settings from db
   const [dbExpenses, setDbExpenses] = React.useState<any[]>([]);
@@ -353,6 +354,7 @@ export function AddExpenseDialog({ open, onOpenChange, initialData }: AddExpense
           category: finalCategory,
           date,
           notes: incomeNotes,
+          submittedToBank: submittedToBank === 'yes',
           createdAt: Date.now(),
           createdBy: attr.userId,
           createdByName: attr.userName,
@@ -470,6 +472,7 @@ export function AddExpenseDialog({ open, onOpenChange, initialData }: AddExpense
     setDate(new Date().toISOString().split('T')[0]);
     setTransactionType('expense');
     setIncomeNotes('');
+    setSubmittedToBank('yes');
   };
 
   return (
@@ -711,6 +714,20 @@ export function AddExpenseDialog({ open, onOpenChange, initialData }: AddExpense
                   value={incomeNotes}
                   onChange={(e) => setIncomeNotes(e.target.value)}
                 />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label className="text-xs font-black uppercase text-muted-foreground flex items-center gap-1.5">
+                  🏦 Submitted to Bank?
+                </Label>
+                <Select value={submittedToBank} onValueChange={(v: 'yes' | 'no') => setSubmittedToBank(v)}>
+                  <SelectTrigger className="w-full bg-background font-bold text-foreground">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="yes" className="font-bold text-emerald-600">Yes (Debited to Collective Bank Account)</SelectItem>
+                    <SelectItem value="no" className="font-bold text-rose-500">No (Keep as cash/handover - does not put up to bank)</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           )}

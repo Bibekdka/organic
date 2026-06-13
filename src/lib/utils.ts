@@ -583,7 +583,9 @@ export function calculateSettlements(members: any[], expenses: any[], incomes: a
   balances['bank'] = 0;
 
   // 1. Calculate total cooperative income directly from real logged incomes in the database
-  const totalCoopIncome = incomes.reduce((sum, inc: any) => sum + (parseFloat(inc.amount) || 0), 0);
+  const totalCoopIncome = incomes
+    .filter((inc: any) => inc.submittedToBank !== false && inc.submittedToBank !== 'no')
+    .reduce((sum, inc: any) => sum + (parseFloat(inc.amount) || 0), 0);
 
   let totalCoopExpense = 0;
 
