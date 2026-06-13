@@ -26,7 +26,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn, getUserAttribution } from '@/lib/utils';
 import { SplitType, Member, Frequency } from '@/types';
-import { collection, addDoc, serverTimestamp, query, onSnapshot, doc, updateDoc } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, query, onSnapshot, doc, updateDoc, setDoc } from 'firebase/firestore';
 import { db, auth } from '@/lib/firebase';
 import { handleFirestoreError, OperationType } from '@/lib/firestore-errors';
 import { toast } from 'sonner';
@@ -98,14 +98,106 @@ export function AddExpenseDialog({ open, onOpenChange, initialData }: AddExpense
   const [transactionType, setTransactionType] = React.useState<'expense' | 'income'>('expense');
   const [incomeNotes, setIncomeNotes] = React.useState('');
 
+  // Dynamic Categories and Settings from db
+  const [dbExpenses, setDbExpenses] = React.useState<any[]>([]);
+  const [dbIncomes, setDbIncomes] = React.useState<any[]>([]);
+  const [globalSettings, setGlobalSettings] = React.useState<any>(null);
+
+  React.useEffect(() => {
+    if (!open) return;
+    const unsubExpenses = onSnapshot(collection(db, 'expenses'), (snapshot) => {
+      setDbExpenses(snapshot.docs.map(d => d.data()));
+    }, () => {});
+
+    const unsubIncomes = onSnapshot(collection(db, 'incomes'), (snapshot) => {
+      setDbIncomes(snapshot.docs.map(d => d.data()));
+    }, () => {});
+
+    const unsubSettings = onSnapshot(doc(db, 'settings', 'global'), (snapshot) => {
+      if (snapshot.exists()) {
+        setGlobalSettings(snapshot.data());
+      }
+    }, () => {});
+
+    return () => {
+      unsubExpenses();
+      unsubIncomes();
+      unsubSettings();
+    };
+  }, [open]);
+
+  // Compute dynamically ordered expense categories
+  const expenseCounts = React.useMemo(() => {
+    const counts: Record<string, number> = {};
+    dbExpenses.forEach(e => {
+      const cat = e.category;
+      if (cat) {
+        counts[cat] = (counts[cat] || 0) + 1;
+      }
+    });
+    return counts;
+  }, [dbExpenses]);
+
+  const sortedExpenseCategories = React.useMemo(() => {
+    const allCatsSet = new Set([
+      ...DEFAULT_CATEGORIES,
+      ...(globalSettings?.customExpenseCategories || []),
+      ...dbExpenses.map(e => e.category).filter(Boolean)
+    ]);
+
+    return Array.from(allCatsSet).sort((a, b) => {
+      const countA = expenseCounts[a] || 0;
+      const countB = expenseCounts[b] || 0;
+      if (countB !== countA) {
+        return countB - countA; // Used (higher count) first
+      }
+      return a.localeCompare(b); // Alphabetical tie-breaker
+    });
+  }, [globalSettings?.customExpenseCategories, dbExpenses, expenseCounts]);
+
+  // Compute dynamically ordered income categories
+  const incomeCounts = React.useMemo(() => {
+    const counts: Record<string, number> = {};
+    dbIncomes.forEach(i => {
+      const cat = i.category;
+      if (cat) {
+        counts[cat] = (counts[cat] || 0) + 1;
+      }
+    });
+    return counts;
+  }, [dbIncomes]);
+
+  const sortedIncomeCategories = React.useMemo(() => {
+    const allCatsSet = new Set([
+      ...INCOME_CATEGORIES,
+      ...(globalSettings?.customIncomeCategories || []),
+      ...dbIncomes.map(i => i.category).filter(Boolean)
+    ]);
+
+    return Array.from(allCatsSet).sort((a, b) => {
+      const countA = incomeCounts[a] || 0;
+      const countB = incomeCounts[b] || 0;
+      if (countB !== countA) {
+        return countB - countA; // Used (higher count) first
+      }
+      return a.localeCompare(b); // Alphabetical tie-breaker
+    });
+  }, [globalSettings?.customIncomeCategories, dbIncomes, incomeCounts]);
+
+  const prevTxTypeRef = React.useRef(transactionType);
   React.useEffect(() => {
     if (initialData) return;
-    if (transactionType === 'income') {
-      setCategory('Sales');
-    } else {
-      setCategory('Grocery');
+    if (prevTxTypeRef.current !== transactionType) {
+      if (transactionType === 'income') {
+        setCategory(sortedIncomeCategories[0] || 'Sales');
+      } else {
+        setCategory(sortedExpenseCategories[0] || 'Grocery');
+      }
+      setIsCustomCategory(false);
+      setCustomCategory('');
+      prevTxTypeRef.current = transactionType;
     }
-  }, [transactionType, initialData]);
+  }, [transactionType, initialData, sortedIncomeCategories, sortedExpenseCategories]);
 
   /**
    * Effect: Initialize form with initialData if editing.
@@ -114,7 +206,11 @@ export function AddExpenseDialog({ open, onOpenChange, initialData }: AddExpense
     if (initialData && open) {
       setAmount(initialData.amount || 0);
       setDescription(initialData.description || '');
-      if (DEFAULT_CATEGORIES.includes(initialData.category)) {
+      const defaultList = initialData.type === 'income' || transactionType === 'income'
+        ? sortedIncomeCategories
+        : sortedExpenseCategories;
+      const isDefault = defaultList.includes(initialData.category);
+      if (isDefault) {
         setCategory(initialData.category);
         setIsCustomCategory(false);
       } else {
@@ -139,7 +235,7 @@ export function AddExpenseDialog({ open, onOpenChange, initialData }: AddExpense
     } else if (open && !initialData) {
       resetForm();
     }
-  }, [initialData, open]);
+  }, [initialData, open, sortedIncomeCategories, sortedExpenseCategories]);
 
   /**
    * Effect: Fetch members from Firestore when the dialog opens.
@@ -206,6 +302,35 @@ export function AddExpenseDialog({ open, onOpenChange, initialData }: AddExpense
       return;
     }
 
+    const finalCategory = (isCustomCategory ? customCategory : category).trim();
+    if (!finalCategory) {
+      toast.error("Please select or specify a category");
+      return;
+    }
+
+    const saveCustomCategoryIfNeeded = async () => {
+      if (!isCustomCategory) return;
+      try {
+        if (transactionType === 'income') {
+          const currentCustoms = globalSettings?.customIncomeCategories || [];
+          if (!currentCustoms.includes(finalCategory)) {
+            await setDoc(doc(db, 'settings', 'global'), {
+              customIncomeCategories: [...currentCustoms, finalCategory]
+            }, { merge: true });
+          }
+        } else {
+          const currentCustoms = globalSettings?.customExpenseCategories || [];
+          if (!currentCustoms.includes(finalCategory)) {
+            await setDoc(doc(db, 'settings', 'global'), {
+              customExpenseCategories: [...currentCustoms, finalCategory]
+            }, { merge: true });
+          }
+        }
+      } catch (err) {
+        console.error("Failed to save custom category permanently:", err);
+      }
+    };
+
     if (transactionType === 'income') {
       if (amount <= 0 || !description) {
         toast.error("Please fill all fields correctly");
@@ -220,11 +345,12 @@ export function AddExpenseDialog({ open, onOpenChange, initialData }: AddExpense
 
       setIsSubmitting(true);
       try {
+        await saveCustomCategoryIfNeeded();
         const attr = getUserAttribution();
         await addDoc(collection(db, 'incomes'), {
           source: description,
           amount,
-          category: category,
+          category: finalCategory,
           date,
           notes: incomeNotes,
           createdAt: Date.now(),
@@ -257,9 +383,7 @@ export function AddExpenseDialog({ open, onOpenChange, initialData }: AddExpense
     
     setIsSubmitting(true);
     try {
-      // Use custom category if the user opted for it
-      const finalCategory = isCustomCategory ? customCategory : category;
-      
+      await saveCustomCategoryIfNeeded();
       const attr = getUserAttribution();
       const expenseData = {
         description,
@@ -420,14 +544,26 @@ export function AddExpenseDialog({ open, onOpenChange, initialData }: AddExpense
                         if (v === 'custom') setIsCustomCategory(true);
                         else setCategory(v);
                       }}>
-                        <SelectTrigger className="w-full bg-background">
+                        <SelectTrigger className="w-full bg-background font-bold text-foreground">
                           <SelectValue placeholder="Category" />
                         </SelectTrigger>
                         <SelectContent>
-                          {DEFAULT_CATEGORIES.map(cat => (
-                            <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                          ))}
-                          <SelectItem value="custom" className="text-primary font-bold">
+                          {sortedExpenseCategories.map(cat => {
+                            const count = expenseCounts[cat] || 0;
+                            return (
+                              <SelectItem key={cat} value={cat}>
+                                <span className="flex items-center justify-between w-full gap-4 font-bold text-foreground">
+                                  <span>{cat}</span>
+                                  {count > 0 && (
+                                    <span className="text-[9px] text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 px-1.5 py-0.5 rounded-md font-mono">
+                                      {count}x
+                                    </span>
+                                  )}
+                                </span>
+                              </SelectItem>
+                            );
+                          })}
+                          <SelectItem value="custom" className="text-primary font-black">
                             + Add Custom...
                           </SelectItem>
                         </SelectContent>
@@ -439,23 +575,57 @@ export function AddExpenseDialog({ open, onOpenChange, initialData }: AddExpense
                         placeholder="Custom Category name..." 
                         value={customCategory}
                         onChange={(e) => setCustomCategory(e.target.value)}
-                        className="flex-1"
+                        className="flex-1 font-bold text-foreground"
                       />
-                      <Button variant="ghost" size="sm" onClick={() => setIsCustomCategory(false)}>Cancel</Button>
+                      <Button variant="ghost" size="sm" className="font-bold text-muted-foreground" onClick={() => setIsCustomCategory(false)}>Cancel</Button>
                     </div>
                   )}
                 </div>
               ) : (
-                <Select value={category} onValueChange={(v) => setCategory(v)}>
-                  <SelectTrigger className="w-full bg-background">
-                    <SelectValue placeholder="Income Category" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {INCOME_CATEGORIES.map(cat => (
-                      <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="flex gap-2">
+                  {!isCustomCategory ? (
+                    <>
+                      <Select value={category} onValueChange={(v) => {
+                        if (v === 'custom') setIsCustomCategory(true);
+                        else setCategory(v);
+                      }}>
+                        <SelectTrigger className="w-full bg-background font-bold text-foreground">
+                          <SelectValue placeholder="Income Category" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {sortedIncomeCategories.map(cat => {
+                            const count = incomeCounts[cat] || 0;
+                            return (
+                              <SelectItem key={cat} value={cat}>
+                                <span className="flex items-center justify-between w-full gap-4 font-bold text-foreground">
+                                  <span>{cat}</span>
+                                  {count > 0 && (
+                                    <span className="text-[9px] text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 px-1.5 py-0.5 rounded-md font-mono">
+                                      {count}x
+                                    </span>
+                                  )}
+                                </span>
+                              </SelectItem>
+                            );
+                          })}
+                          <SelectItem value="custom" className="text-primary font-black">
+                            + Add Custom...
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </>
+                  ) : (
+                    <div className="flex-1 flex gap-2">
+                      <Input 
+                        placeholder="Custom Category name..." 
+                        value={customCategory}
+                        onChange={(e) => setCustomCategory(e.target.value)}
+                        className="flex-1 font-bold text-foreground"
+                      />
+                      <Button variant="ghost" size="sm" className="font-bold text-muted-foreground" onClick={() => setIsCustomCategory(false)}>Cancel</Button>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           </div>

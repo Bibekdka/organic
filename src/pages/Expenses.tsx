@@ -129,6 +129,37 @@ export function ExpensesPage() {
     };
   }, []);
 
+  // Dynamically compile and sort categories for the filter
+  const filterCategories = React.useMemo(() => {
+    const DEFAULT_CATEGORIES = [
+      'Electricity', 'Food', 'Travel', 'Utility', 'Maintenance', 'Rent', 
+      'Payroll', 'Communication', 'Marketing', 'Capital', 'Grocery', 
+      'Misc', 'Others'
+    ];
+    // Count occurrences in existing expenses
+    const counts: Record<string, number> = {};
+    expenseList.forEach(e => {
+      if (e.category) {
+        counts[e.category] = (counts[e.category] || 0) + 1;
+      }
+    });
+
+    const allCats = new Set([
+      ...DEFAULT_CATEGORIES,
+      ...(settings?.customExpenseCategories || []),
+      ...expenseList.map(e => e.category).filter(Boolean)
+    ]);
+
+    return Array.from(allCats).sort((a, b) => {
+      const countA = counts[a] || 0;
+      const countB = counts[b] || 0;
+      if (countB !== countA) {
+        return countB - countA; // Used (higher count) first
+      }
+      return a.localeCompare(b); // Alphabetical tie-breaker
+    });
+  }, [expenseList, settings?.customExpenseCategories]);
+
   const handleExportPDF = () => {
     const doc = new jsPDF();
     doc.setFontSize(18);
@@ -497,24 +528,29 @@ export function ExpensesPage() {
             />
          </div>
          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-            <SelectTrigger className="h-11 bg-card border-none shadow-sm text-foreground">
+            <SelectTrigger className="h-11 bg-card border-none shadow-sm text-foreground font-bold">
                <div className="flex items-center gap-2">
                   <Filter className="w-3.5 h-3.5 text-muted-foreground" />
                   <SelectValue placeholder="All Categories" />
                </div>
             </SelectTrigger>
-            <SelectContent>
-               <SelectItem value="all">All Categories</SelectItem>
-               <SelectItem value="Electricity">Electricity</SelectItem>
-               <SelectItem value="Food">Food</SelectItem>
-               <SelectItem value="Travel">Travel</SelectItem>
-               <SelectItem value="Utility">Utility</SelectItem>
-               <SelectItem value="Maintenance">Maintenance</SelectItem>
-               <SelectItem value="Rent">Rent</SelectItem>
-               <SelectItem value="Payroll">Payroll</SelectItem>
-               <SelectItem value="Grocery">Grocery</SelectItem>
-               <SelectItem value="Misc">Misc</SelectItem>
-               <SelectItem value="Others">Others</SelectItem>
+            <SelectContent className="max-h-[300px]">
+               <SelectItem value="all" className="font-black">All Categories</SelectItem>
+               {filterCategories.map(cat => {
+                  const count = expenseList.filter(e => e.category === cat).length;
+                  return (
+                     <SelectItem key={cat} value={cat}>
+                        <span className="flex items-center justify-between w-full gap-4 font-bold text-foreground">
+                           <span>{cat}</span>
+                           {count > 0 && (
+                              <span className="text-[9px] text-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded-md font-mono">
+                                 {count}x
+                              </span>
+                           )}
+                        </span>
+                     </SelectItem>
+                  );
+               })}
             </SelectContent>
          </Select>
          <Button variant="outline" className="h-11 bg-card border-none shadow-sm gap-2 text-foreground">
