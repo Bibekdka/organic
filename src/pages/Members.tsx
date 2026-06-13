@@ -606,6 +606,7 @@ export function MembersPage() {
 
   const [selectedMember, setSelectedMember] = React.useState<Member | null>(null);
   const [isProfileOpen, setIsProfileOpen] = React.useState(false);
+  const [profileTab, setProfileTab] = React.useState<string>('equity');
   const [memberTransactions, setMemberTransactions] = React.useState<any[]>([]);
   const [loadingProfile, setLoadingProfile] = React.useState(false);
 
@@ -627,8 +628,9 @@ export function MembersPage() {
     return () => unsub();
   }, [isProfileOpen, selectedMember]);
 
-  const viewProfile = (member: Member) => {
+  const viewProfile = (member: Member, tab: string = 'equity') => {
     setSelectedMember(member);
+    setProfileTab(tab);
     setIsProfileOpen(true);
   };
 
@@ -885,7 +887,16 @@ export function MembersPage() {
                           </span>
                         </div>
                       </TableCell>
-                      <TableCell className="font-bold text-sm text-foreground">₹{contributions[member.id]?.toLocaleString() || 0}</TableCell>
+                      <TableCell 
+                        className="font-bold text-sm text-foreground cursor-pointer hover:text-primary transition-all duration-150 group"
+                        onClick={() => viewProfile(member, 'contributions')}
+                        title="Click to view full payment history and dates"
+                      >
+                        <div className="flex items-center gap-1.5 hover:underline">
+                          <span>₹{contributions[member.id]?.toLocaleString() || 0}</span>
+                          <Receipt className="w-3.5 h-3.5 text-muted-foreground opacity-40 group-hover:opacity-100 transition-opacity" />
+                        </div>
+                      </TableCell>
                       <TableCell className="text-xs text-muted-foreground">
                         <div className="flex items-center gap-1.5">
                            <Clock className="w-3 h-3" />
@@ -1029,9 +1040,18 @@ export function MembersPage() {
                         {member.status}
                       </p>
                     </div>
-                    <div className="p-2 rounded-lg bg-secondary/20 space-y-1">
-                      <p className="text-[8px] uppercase font-bold text-muted-foreground tracking-tighter">Invested ({categoryFilter === 'all' ? 'Total' : categoryFilter})</p>
-                      <p className="text-[10px] font-bold text-foreground">₹{contributions[member.id]?.toLocaleString() || 0}</p>
+                    <div 
+                      className="p-2 rounded-lg bg-secondary/20 space-y-1 cursor-pointer hover:bg-primary/5 active:scale-95 transition-all text-primary flex flex-col justify-between"
+                      onClick={() => viewProfile(member, 'contributions')}
+                      title="Click to view payment history and dates"
+                    >
+                      <p className="text-[8px] uppercase font-bold text-muted-foreground tracking-tighter flex items-center justify-between">
+                        <span>Invested ({categoryFilter === 'all' ? 'Total' : categoryFilter})</span>
+                        <Receipt className="w-2.5 h-2.5 text-muted-foreground opacity-60" />
+                      </p>
+                      <p className="text-[10px] font-black text-foreground hover:underline">
+                        ₹{contributions[member.id]?.toLocaleString() || 0}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -1321,7 +1341,7 @@ export function MembersPage() {
                      </div>
                   )}
 
-                  <Tabs defaultValue="equity" className="w-full">
+                  <Tabs value={profileTab} onValueChange={(val) => setProfileTab(val as any)} className="w-full">
                     <TabsList className="grid grid-cols-2 w-full mb-6 py-1 bg-muted/50">
                         <TabsTrigger value="equity" className="text-xs font-bold gap-2">
                            <Tag className="w-3.5 h-3.5" /> Equity & Shares
