@@ -13,6 +13,9 @@ import {
   ArrowUpRight,
   Pencil
 } from 'lucide-react';
+import { jsPDF } from "jspdf";
+import autoTable from "jspdf-autotable";
+import * as XLSX from 'xlsx';
 import { 
   collection, 
   onSnapshot, 
@@ -25,7 +28,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Income } from '@/types';
-import { cn, getUserAttribution } from '@/lib/utils';
+import { cn, getUserAttribution, downloadPDFFile } from '@/lib/utils';
 import { handleFirestoreError, OperationType } from '@/lib/firestore-errors';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -172,6 +175,56 @@ export function IncomesPage() {
     inc.category.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const handleExportPDF = () => {
+    if (filteredIncomes.length === 0) {
+      toast.error("No data to export");
+      return;
+    }
+    const doc = new jsPDF();
+    doc.setFontSize(18);
+    doc.text("Organic-O-Eats - Income Report", 14, 20);
+    doc.setFontSize(10);
+    doc.text(`Generated on: ${new Date().toLocaleString()}`, 14, 28);
+    
+    const tableData = filteredIncomes.map(inc => [
+      inc.source,
+      `₹${inc.amount.toLocaleString()}`,
+      inc.date,
+      inc.category,
+      inc.submittedToBank === false ? 'Offline Cash' : 'Submitted to Bank',
+      inc.notes || 'No description'
+    ]);
+
+    autoTable(doc, {
+      head: [['Source', 'Amount', 'Date', 'Category', 'Bank Status', 'Notes']],
+      body: tableData,
+      startY: 35,
+      theme: 'grid',
+      headStyles: { fillColor: [16, 185, 129] } // emerald-500 equivalent color
+    });
+
+    const reportName = `incomes_${new Date().toISOString().split('T')[0]}.pdf`;
+    downloadPDFFile(doc, reportName);
+  };
+
+  const handleExportExcel = () => {
+    if (filteredIncomes.length === 0) {
+      toast.error("No data to export");
+      return;
+    }
+    const ws = XLSX.utils.json_to_sheet(filteredIncomes.map(inc => ({
+      Source: inc.source,
+      Amount: inc.amount,
+      Date: inc.date,
+      Category: inc.category,
+      'Submitted to Bank': inc.submittedToBank === false ? 'No (Offline Cash)' : 'Yes',
+      Notes: inc.notes || ''
+    })));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Incomes");
+    XLSX.writeFile(wb, `incomes_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -183,9 +236,21 @@ export function IncomesPage() {
           <p className="text-muted-foreground mt-1 font-medium">Record and monitor organization inflows.</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" className="gap-2 bg-card border-none shadow-sm text-foreground">
-            <Download className="w-4 h-4" /> Export
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger render={
+              <Button variant="outline" className="gap-2 bg-card border-none shadow-sm text-foreground">
+                <Download className="w-4 h-4" /> Export
+              </Button>
+            } />
+            <DropdownMenuContent align="end" className="w-48 bg-card border border-border">
+              <DropdownMenuItem onClick={handleExportPDF} className="gap-2 text-foreground cursor-pointer">
+                <Download className="w-4 h-4 text-rose-500" /> Export as PDF
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleExportExcel} className="gap-2 text-foreground cursor-pointer">
+                <Download className="w-4 h-4 text-emerald-500" /> Export as Excel
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button disabled={!isAdmin} onClick={() => setIsAddOpen(true)} className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-200 disabled:opacity-50">
             <Plus className="w-4 h-4" /> Add Income
           </Button>

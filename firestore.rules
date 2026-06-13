@@ -54,7 +54,11 @@ service cloud.firestore {
              data.amount is number && data.amount >= 0 &&
              data.category is string && data.category.size() <= 100 &&
              data.date is string &&
-             (!data.keys().hasAny(['createdByName']) || data.createdByName is string);
+             (!data.keys().hasAny(['createdByName']) || data.createdByName is string) &&
+             (!data.keys().hasAny(['notes']) || data.notes is string) &&
+             (!data.keys().hasAny(['submittedToBank']) || data.submittedToBank is bool) &&
+             (!data.keys().hasAny(['updatedBy']) || data.updatedBy is string) &&
+             (!data.keys().hasAny(['updatedAt']) || data.updatedAt is number || data.updatedAt is timestamp);
     }
 
     function isValidRecurringTemplate(data) {
@@ -180,7 +184,7 @@ service cloud.firestore {
       allow create: if isSignedIn() && isValidIncome(incoming()) && (!incoming().keys().hasAny(['createdBy']) || incoming().createdBy == request.auth.uid);
       allow update: if isSignedIn() && isValidIncome(incoming()) && 
                      (!existing().keys().hasAny(['createdBy']) || existing().createdBy == null || incoming().createdBy == existing().createdBy || isAdmin()) &&
-                     incoming().diff(existing()).affectedKeys().hasOnly(['source', 'amount', 'category', 'date', 'notes', 'updatedAt', 'updatedByName', 'updatedByDevice']);
+                     incoming().diff(existing()).affectedKeys().hasOnly(['source', 'amount', 'category', 'date', 'notes', 'submittedToBank', 'updatedAt', 'updatedBy', 'updatedByName', 'updatedByDevice']);
       allow delete: if isSignedIn();
     }
 
