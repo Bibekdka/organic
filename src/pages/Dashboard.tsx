@@ -664,8 +664,11 @@ export function Dashboard() {
         const totalOnboardingShares = (stats.onboarding || []).reduce((sum, item) => sum + (parseFloat(item.shares) || 0), 0);
         const expectedShareSale = totalOnboardingShares * sharePrice;
         const netCashflow = dynamicTotalIncome - stats.totalSpent;
+        const amountToBeDeposited = (stats.allIncomes || [])
+          .filter((inc: any) => inc.submittedToBank === false || inc.submittedToBank === 'no')
+          .reduce((sum, inc: any) => sum + (parseFloat(inc.amount) || 0), 0);
         return (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-7 gap-6">
             <StatCard 
               title="Active Members" 
               value={stats.totalMembers.toString()} 
@@ -683,6 +686,14 @@ export function Dashboard() {
                 const element = document.getElementById('bank-ledger-section');
                 if (element) element.scrollIntoView({ behavior: 'smooth' });
               }}
+            />
+            <StatCard 
+              title="Amount to be Deposited" 
+              value={`₹${amountToBeDeposited.toLocaleString()}`} 
+              icon={<TrendingUp className="w-5 h-5 text-amber-500" />} 
+              color="bg-amber-500/10 text-amber-500"
+              trend="Pending Bank Deposit"
+              trendType="up"
             />
             <StatCard 
               title="Total Spent" 

@@ -10,7 +10,8 @@ import {
   Filter,
   Loader2,
   DollarSign,
-  ArrowUpRight
+  ArrowUpRight,
+  Pencil
 } from 'lucide-react';
 import { 
   collection, 
@@ -19,7 +20,8 @@ import {
   addDoc, 
   deleteDoc, 
   doc, 
-  orderBy
+  orderBy,
+  updateDoc
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Income } from '@/types';
@@ -72,6 +74,7 @@ export function IncomesPage() {
   const isAdmin = user?.email === 'bibekdeka97@gmail.com';
 
   // Form state
+  const [editingIncome, setEditingIncome] = React.useState<Income | null>(null);
   const [source, setSource] = React.useState('');
   const [amount, setAmount] = React.useState('');
   const [category, setCategory] = React.useState('Sales');
@@ -90,7 +93,7 @@ export function IncomesPage() {
     return unsub;
   }, []);
 
-  const handleAddIncome = async () => {
+  const handleSaveIncome = async () => {
     if (!isAdmin) {
       toast.error("Permission Denied: Only bibekdeka97@gmail.com can perform this action");
       return;
@@ -99,29 +102,44 @@ export function IncomesPage() {
     setIsSubmitting(true);
     const attr = getUserAttribution();
     try {
-      await addDoc(collection(db, 'incomes'), {
+      const incomeData = {
         source,
         amount: parseFloat(amount),
         category,
         date,
         notes,
-        submittedToBank: submittedToBank === 'yes',
-        createdAt: Date.now(),
-        createdBy: attr.userId,
-        createdByName: attr.userName,
-        createdByDevice: attr.device
-      });
-      toast.success('Income recorded successfully');
+        submittedToBank: submittedToBank === 'yes'
+      };
+
+      if (editingIncome) {
+        await updateDoc(doc(db, 'incomes', editingIncome.id), {
+          ...incomeData,
+          updatedAt: Date.now(),
+          updatedBy: attr.userId,
+          updatedByName: attr.userName
+        });
+        toast.success('Income record updated successfully');
+      } else {
+        await addDoc(collection(db, 'incomes'), {
+          ...incomeData,
+          createdAt: Date.now(),
+          createdBy: attr.userId,
+          createdByName: attr.userName,
+          createdByDevice: attr.device
+        });
+        toast.success('Income recorded successfully');
+      }
       setIsAddOpen(false);
       resetForm();
     } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, 'incomes');
+      handleFirestoreError(error, editingIncome ? OperationType.UPDATE : OperationType.CREATE, 'incomes');
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const resetForm = () => {
+    setEditingIncome(null);
     setSource('');
     setAmount('');
     setCategory('Sales');
@@ -145,6 +163,9 @@ export function IncomesPage() {
   };
 
   const totalIncome = incomes.reduce((sum, inc) => sum + inc.amount, 0);
+  const amountToBeDeposited = incomes
+    .filter(inc => inc.submittedToBank === false || inc.submittedToBank === 'no')
+    .reduce((sum, inc) => sum + inc.amount, 0);
 
   const filteredIncomes = incomes.filter(inc => 
     inc.source.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -171,7 +192,7 @@ export function IncomesPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         <div className="bg-emerald-500 rounded-2xl p-6 text-white shadow-xl shadow-emerald-100 flex flex-col justify-between">
           <div className="flex justify-between items-start">
             <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
@@ -182,6 +203,18 @@ export function IncomesPage() {
           <div className="mt-8">
             <p className="text-white/70 text-xs font-black uppercase tracking-widest">Total Revenue</p>
             <h2 className="text-4xl font-black mt-2">₹{totalIncome.toLocaleString()}</h2>
+          </div>
+        </div>
+
+        <div className="bg-amber-500 rounded-2xl p-6 text-white shadow-xl shadow-amber-100 flex flex-col justify-between">
+          <div className="flex justify-between items-start">
+            <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
+              <TrendingUp className="w-6 h-6 animate-pulse" />
+            </div>
+          </div>
+          <div className="mt-8">
+            <p className="text-white/70 text-xs font-black uppercase tracking-widest">Amount to be Deposited</p>
+            <h2 className="text-4xl font-black mt-2">₹{amountToBeDeposited.toLocaleString()}</h2>
           </div>
         </div>
         
@@ -294,6 +327,18 @@ export function IncomesPage() {
                         </Button>
                       } />
                       <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => {
+                          setEditingIncome(income);
+                          setSource(income.source);
+                          setAmount(income.amount.toString());
+                          setCategory(income.category);
+                          setDate(income.date);
+                          setNotes(income.notes || '');
+                          setSubmittedToBank(income.submittedToBank === false ? 'no' : 'yes');
+                          setIsAddOpen(true);
+                        }} className="cursor-pointer">
+                           <Pencil className="w-4 h-4 mr-2 text-indigo-500" /> Edit
+                        </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => deleteIncome(income.id)} className="text-rose-500 cursor-pointer">
                            <Trash2 className="w-4 h-4 mr-2" /> Delete
                         </DropdownMenuItem>
@@ -344,9 +389,28 @@ export function IncomesPage() {
                 </div>
                 <div className="text-right">
                   <p className="text-sm font-black text-emerald-600">₹{income.amount.toLocaleString()}</p>
-                  <Button onClick={() => deleteIncome(income.id)} variant="ghost" size="icon" className={cn("h-8 w-8 text-rose-500 mt-1", !isAdmin && "hidden")}>
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </Button>
+                  <div className="flex items-center gap-1 justify-end mt-1">
+                    <Button 
+                      onClick={() => {
+                        setEditingIncome(income);
+                        setSource(income.source);
+                        setAmount(income.amount.toString());
+                        setCategory(income.category);
+                        setDate(income.date);
+                        setNotes(income.notes || '');
+                        setSubmittedToBank(income.submittedToBank === false ? 'no' : 'yes');
+                        setIsAddOpen(true);
+                      }} 
+                      variant="ghost" 
+                      size="icon" 
+                      className={cn("h-8 w-8 text-indigo-500", !isAdmin && "hidden")}
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </Button>
+                    <Button onClick={() => deleteIncome(income.id)} variant="ghost" size="icon" className={cn("h-8 w-8 text-rose-500", !isAdmin && "hidden")}>
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
                 </div>
               </div>
               {income.notes && (
@@ -364,11 +428,18 @@ export function IncomesPage() {
         </div>
       </div>
 
-      <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+      <Dialog open={isAddOpen} onOpenChange={(open) => {
+        setIsAddOpen(open);
+        if (!open) resetForm();
+      }}>
         <DialogContent className="sm:max-w-[450px]">
           <DialogHeader>
-            <DialogTitle className="text-2xl font-black">Record Income</DialogTitle>
-            <DialogDescription>Manually add an inflow transaction to the records.</DialogDescription>
+            <DialogTitle className="text-2xl font-black">
+              {editingIncome ? "Edit Income Record" : "Record Income"}
+            </DialogTitle>
+            <DialogDescription>
+              {editingIncome ? "Modify the details of this inflow transaction." : "Manually add an inflow transaction to the records."}
+            </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
@@ -441,7 +512,7 @@ export function IncomesPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsAddOpen(false)} className="text-foreground">Cancel</Button>
             <Button 
-               onClick={handleAddIncome} 
+               onClick={handleSaveIncome} 
                disabled={!source || !amount || isSubmitting}
                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-8 shadow-lg shadow-emerald-200"
             >

@@ -203,7 +203,7 @@ export function AddExpenseDialog({ open, onOpenChange, initialData }: AddExpense
   /**
    * Effect: Initialize form with initialData if editing.
    */
-  React.useEffect(() => {
+   React.useEffect(() => {
     if (initialData && open) {
       setAmount(initialData.amount || 0);
       setDescription(initialData.description || '');
@@ -222,6 +222,7 @@ export function AddExpenseDialog({ open, onOpenChange, initialData }: AddExpense
       setDate(initialData.date || new Date().toISOString().split('T')[0]);
       setSplitType(initialData.splitType || 'equal');
       setIsRecurring(!!initialData.isRecurring);
+      setSubmittedToBank(initialData.submittedToBank === false ? 'no' : 'yes');
       
       const involvedIds = initialData.splits?.map((s: any) => s.memberId) || [];
       setSelectedMemberIds(involvedIds);
@@ -348,24 +349,39 @@ export function AddExpenseDialog({ open, onOpenChange, initialData }: AddExpense
       try {
         await saveCustomCategoryIfNeeded();
         const attr = getUserAttribution();
-        await addDoc(collection(db, 'incomes'), {
+        
+        const incomeData = {
           source: description,
           amount,
           category: finalCategory,
           date,
           notes: incomeNotes,
-          submittedToBank: submittedToBank === 'yes',
-          createdAt: Date.now(),
-          createdBy: attr.userId,
-          createdByName: attr.userName,
-          createdByDevice: attr.device
-        });
-        toast.success("Income logged successfully");
+          submittedToBank: submittedToBank === 'yes'
+        };
+
+        if (initialData?.id) {
+          await updateDoc(doc(db, 'incomes', initialData.id), {
+            ...incomeData,
+            updatedAt: Date.now(),
+            updatedByName: attr.userName,
+            updatedByDevice: attr.device
+          });
+          toast.success("Income updated successfully");
+        } else {
+          await addDoc(collection(db, 'incomes'), {
+            ...incomeData,
+            createdAt: Date.now(),
+            createdBy: attr.userId,
+            createdByName: attr.userName,
+            createdByDevice: attr.device
+          });
+          toast.success("Income logged successfully");
+        }
         onOpenChange(false);
         resetForm();
       } catch (error) {
-        toast.error("Failed to log income");
-        handleFirestoreError(error, OperationType.CREATE, 'incomes');
+        toast.error("Failed to save income");
+        handleFirestoreError(error, initialData?.id ? OperationType.UPDATE : OperationType.CREATE, 'incomes');
       } finally {
         setIsSubmitting(false);
       }
