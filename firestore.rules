@@ -49,11 +49,13 @@ service cloud.firestore {
     }
 
     function isValidIncome(data) {
-      return data.keys().hasAll(['source', 'amount', 'category', 'date', 'createdAt', 'createdBy']) &&
+      return data.keys().hasAll(['source', 'amount', 'category', 'date']) &&
              data.source is string && data.source.size() <= 200 &&
              data.amount is number && data.amount >= 0 &&
              data.category is string && data.category.size() <= 100 &&
              data.date is string &&
+             (!data.keys().hasAny(['createdAt']) || data.createdAt is number || data.createdAt is timestamp) &&
+             (!data.keys().hasAny(['createdBy']) || data.createdBy is string) &&
              (!data.keys().hasAny(['createdByName']) || data.createdByName is string) &&
              (!data.keys().hasAny(['notes']) || data.notes is string) &&
              (!data.keys().hasAny(['submittedToBank']) || data.submittedToBank is bool) &&
