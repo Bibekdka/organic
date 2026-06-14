@@ -2,6 +2,7 @@ import * as React from 'react';
 import { useAuthStore } from './store/useAuthStore';
 import { Shell, PageId } from './components/layout/Shell';
 import { Dashboard } from './pages/Dashboard';
+import { BankPage } from './pages/Bank';
 import { MembersPage } from './pages/Members';
 import { ExpensesPage } from './pages/Expenses';
 import { SettlementsPage } from './pages/Settlements';
@@ -198,7 +199,8 @@ export default function App() {
 
   const renderPage = () => {
     switch (activePage) {
-      case 'dashboard': return <Dashboard />;
+      case 'dashboard': return <Dashboard onPageChange={setActivePage} />;
+      case 'bank': return <BankPage />;
       case 'members': return <MembersPage />;
       case 'expenses': return <ExpensesPage />;
       case 'settlements': return <SettlementsPage />;
@@ -207,7 +209,7 @@ export default function App() {
       case 'tasks': return <TasksPage />;
       case 'reports': return <ReportsPage />;
       case 'settings': return <SettingsPage />;
-      default: return <Dashboard />;
+      default: return <Dashboard onPageChange={setActivePage} />;
     }
   };
 

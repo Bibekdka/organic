@@ -68,7 +68,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 
-export function Dashboard() {
+export function Dashboard({ onPageChange }: { onPageChange?: any }) {
   const { user } = useAuthStore();
   const isAdmin = user?.email === 'bibekdeka97@gmail.com';
   const [stats, setStats] = React.useState({
@@ -679,21 +679,28 @@ export function Dashboard() {
               title="Bank Balance" 
               value={`₹${(bankBalance / 1000).toFixed(bankBalance >= 1000 ? 1 : 2)}k`} 
               icon={<PiggyBank className="w-5 h-5 text-emerald-500" />} 
-              color="bg-emerald-500/10 text-emerald-500"
+              color="bg-emerald-500/10 text-emerald-500 hover:shadow-md cursor-pointer transition-all duration-200"
               trend={`₹${bankBalance.toLocaleString()}`}
               trendType={bankBalance >= 0 ? "up" : "down"}
               onClick={() => {
-                const element = document.getElementById('bank-ledger-section');
-                if (element) element.scrollIntoView({ behavior: 'smooth' });
+                if (onPageChange) {
+                  onPageChange('bank');
+                } else {
+                  const element = document.getElementById('bank-ledger-section');
+                  if (element) element.scrollIntoView({ behavior: 'smooth' });
+                }
               }}
             />
             <StatCard 
               title="Amount to be Deposited" 
               value={`₹${amountToBeDeposited.toLocaleString()}`} 
               icon={<TrendingUp className="w-5 h-5 text-amber-500" />} 
-              color="bg-amber-500/10 text-amber-500"
+              color="bg-amber-500/10 text-amber-500 hover:shadow-md cursor-pointer transition-all duration-200"
               trend="Pending Bank Deposit"
               trendType="up"
+              onClick={() => {
+                if (onPageChange) onPageChange('bank');
+              }}
             />
             <StatCard 
               title="Total Spent" 

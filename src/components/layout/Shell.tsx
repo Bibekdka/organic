@@ -15,7 +15,8 @@ import {
   Menu, 
   X,
   ChevronRight,
-  TrendingUp
+  TrendingUp,
+  PiggyBank
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -51,7 +52,7 @@ const SidebarItem = ({ icon: Icon, label, active, onClick, collapsed }: SidebarI
   </button>
 );
 
-export type PageId = 'dashboard' | 'members' | 'shares' | 'expenses' | 'settlements' | 'income' | 'tasks' | 'reports' | 'settings';
+export type PageId = 'dashboard' | 'members' | 'shares' | 'expenses' | 'settlements' | 'income' | 'bank' | 'tasks' | 'reports' | 'settings';
 
 interface ShellProps {
   children: React.ReactNode;
@@ -71,6 +72,7 @@ export function Shell({ children, activePage, onPageChange }: ShellProps) {
     { id: 'expenses', label: 'Expenses', icon: Receipt },
     { id: 'settlements', label: 'Settlements', icon: Wallet },
     { id: 'income', label: 'Income', icon: TrendingUp },
+    { id: 'bank', label: 'Bank', icon: PiggyBank },
     { id: 'tasks', label: 'Tasks', icon: CheckSquare },
     { id: 'reports', label: 'Reports', icon: FileText },
     { id: 'settings', label: 'Settings', icon: Settings },

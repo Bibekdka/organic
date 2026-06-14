@@ -8,7 +8,9 @@ import {
   CircleDollarSign,
   Loader2,
   CheckCircle2,
-  PiggyBank
+  PiggyBank,
+  Pencil,
+  Sparkles
 } from 'lucide-react';
 import { 
   PieChart, 
@@ -65,6 +67,17 @@ export function SharesPage() {
   const [isUpdateOpen, setIsUpdateOpen] = React.useState(false);
   const [isPriceOpen, setIsPriceOpen] = React.useState(false);
   const [isProjectedOpen, setIsProjectedOpen] = React.useState(false);
+
+  // Direct Member Shares Edit Form State
+  const [isEditSharesOpen, setIsEditSharesOpen] = React.useState(false);
+  const [editSharesMember, setEditSharesMember] = React.useState<Member | null>(null);
+  const [directSharesCount, setDirectSharesCount] = React.useState('');
+
+  // Direct Onboarding Shares Edit Form State
+  const [isEditOnboardingSharesOpen, setIsEditOnboardingSharesOpen] = React.useState(false);
+  const [editOnboardingRecord, setEditOnboardingRecord] = React.useState<OnboardingRecord | null>(null);
+  const [onboardingSharesCount, setOnboardingSharesCount] = React.useState('');
+  const [isAligning, setIsAligning] = React.useState(false);
 
   // Buy & Sell Shares Form State
   const [isBuySellOpen, setIsBuySellOpen] = React.useState(false);
@@ -289,6 +302,161 @@ export function SharesPage() {
     }
   };
 
+  const handleEditMemberShares = async () => {
+    if (!isAdmin) {
+      toast.error("Permission Denied: Only bibekdeka97@gmail.com can perform this action");
+      return;
+    }
+    if (!editSharesMember || !directSharesCount) return;
+    const newShares = parseFloat(directSharesCount);
+    if (isNaN(newShares) || newShares < 0) {
+      toast.error("Invalid share units");
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      const oldShares = editSharesMember.shares || 0;
+      const finalChange = newShares - oldShares;
+
+      // Update Member
+      await updateDoc(doc(db, 'members', editSharesMember.id), {
+        shares: newShares
+      });
+
+      if (finalChange !== 0) {
+        // Log transaction
+        await addDoc(collection(db, 'share_transactions'), {
+          memberId: editSharesMember.id,
+          memberName: editSharesMember.name,
+          previousUnits: oldShares,
+          newUnits: newShares,
+          change: finalChange,
+          reason: 'Direct Share Balance Edit (Correction)',
+          createdAt: serverTimestamp(),
+          createdByName: auth.currentUser?.displayName || auth.currentUser?.email?.split('@')[0] || 'Unknown'
+        });
+      }
+
+      toast.success(`Shares updated directly for ${editSharesMember.name}`);
+      setIsEditSharesOpen(false);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `members/${editSharesMember.id}`);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleEditOnboardingShares = async () => {
+    if (!isAdmin) {
+      toast.error("Permission Denied: Only bibekdeka97@gmail.com can perform this action");
+      return;
+    }
+    if (!editOnboardingRecord || !onboardingSharesCount) return;
+    const newShares = parseFloat(onboardingSharesCount);
+    if (isNaN(newShares) || newShares < 0) {
+      toast.error("Invalid share units");
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      await updateDoc(doc(db, 'onboarding', editOnboardingRecord.id), {
+        shares: newShares
+      });
+      toast.success(`Shares updated directly for candidate ${editOnboardingRecord.name}`);
+      setIsEditOnboardingSharesOpen(false);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `onboarding/${editOnboardingRecord.id}`);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleAutoAlignShares = async () => {
+    if (!isAdmin) {
+      toast.error("Permission Denied: Only bibekdeka97@gmail.com can perform this action");
+      return;
+    }
+
+    const cleanSharesData: { [key: string]: number } = {
+      "menoka kumari": 10,
+      "vishal singh": 10,
+      "ritam choudhury": 10,
+      "rohit sharma": 10,
+      "rumi begum": 10,
+      "dipali borthakur": 10,
+      "pradip boruah": 7,
+      "aryan konwar": 7,
+      "putlu bhumiz": 7,
+      "amar nath pandit": 7,
+      "mosumi rautiya": 2,
+      "mohima boraik": 2,
+      "shima nayak": 2,
+      "dipok murah": 2,
+      "john pator": 2,
+      "malti moneswar": 2,
+    };
+
+    setIsAligning(true);
+    let memberUpdatesCount = 0;
+    let onboardingUpdatesCount = 0;
+
+    try {
+      // 1. Process members
+      for (const m of members) {
+        const nameKey = m.name.toLowerCase().trim();
+        if (cleanSharesData[nameKey] !== undefined) {
+          const targetShares = cleanSharesData[nameKey];
+          if (m.shares !== targetShares) {
+            const oldShares = m.shares || 0;
+            const finalChange = targetShares - oldShares;
+
+            await updateDoc(doc(db, 'members', m.id), {
+              shares: targetShares
+            });
+
+            await addDoc(collection(db, 'share_transactions'), {
+              memberId: m.id,
+              memberName: m.name,
+              previousUnits: oldShares,
+              newUnits: targetShares,
+              change: finalChange,
+              reason: 'Automatic Share Correction (Spreadsheet Import Alignment)',
+              createdAt: serverTimestamp(),
+              createdByName: auth.currentUser?.displayName || auth.currentUser?.email?.split('@')[0] || 'System'
+            });
+
+            memberUpdatesCount++;
+          }
+        }
+      }
+
+      // 2. Process onboarding
+      for (const o of onboarding) {
+        const nameKey = o.name.toLowerCase().trim();
+        if (cleanSharesData[nameKey] !== undefined) {
+          const targetShares = cleanSharesData[nameKey];
+          if (o.shares !== targetShares) {
+            await updateDoc(doc(db, 'onboarding', o.id), {
+              shares: targetShares
+            });
+            onboardingUpdatesCount++;
+          }
+        }
+      }
+
+      const totalUpdates = memberUpdatesCount + onboardingUpdatesCount;
+      if (totalUpdates > 0) {
+        toast.success(`Success! Aligned ${memberUpdatesCount} active members and ${onboardingUpdatesCount} onboarding candidates to match the pristine ₹10,000 / 100 shares sheet!`);
+      } else {
+        toast.info("Database shares are already perfectly aligned with your clean spreadsheet (100 shares total). No changes needed!");
+      }
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'shares/bulk-align');
+    } finally {
+      setIsAligning(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="h-[60vh] flex items-center justify-center">
@@ -389,6 +557,28 @@ export function SharesPage() {
           <CardHeader>
             <CardTitle className="text-lg">Shareholder Registry</CardTitle>
             <CardDescription>Current share price: ₹{sharePrice} / share</CardDescription>
+            {isAdmin && (
+              <div id="repair-shares-alert" className="bg-amber-500/5 border border-amber-500/20 p-4 rounded-xl text-xs text-amber-500 mt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3 font-semibold leading-relaxed">
+                <div className="flex-1">
+                  <h4 className="font-bold flex items-center gap-1.5 text-amber-500 mb-0.5">
+                    <Sparkles className="w-3.5 h-3.5" /> Spreadsheet Copy-Paste Repair Tool
+                  </h4>
+                  <p className="text-muted-foreground text-[11px] font-medium max-w-2xl">
+                    Has Excel/Google Sheets merged values (e.g., combining Pradip Boruah's 7 shares and 7% into <b>77</b>, or Menoka Kumari's 10 shares and 10% into <b>1010</b>, blowing up the group balance)? Select this utility to instantly align and repair all active ledger entries back to the clean 100 shares / ₹10,000 layout!
+                  </p>
+                </div>
+                <Button 
+                  onClick={handleAutoAlignShares} 
+                  disabled={isAligning} 
+                  size="sm"
+                  variant="outline"
+                  className="border-amber-500/35 hover:bg-amber-500/10 text-amber-500 font-bold shrink-0 self-start sm:self-center h-8 gap-1.5 bg-amber-500/5"
+                >
+                  {isAligning ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                  Repair Merged Values
+                </Button>
+              </div>
+            )}
           </CardHeader>
           <CardContent className="p-0 sm:p-6">
             {/* Desktop View Table */}
@@ -415,20 +605,35 @@ export function SharesPage() {
                         ₹{(m.shares * sharePrice).toLocaleString()}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button 
-                          disabled={!isAdmin}
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => {
-                            setBuySellMemberId(m.id);
-                            setBuySellType('buy');
-                            setBuySellAmount('');
-                            setIsBuySellOpen(true);
-                          }}
-                          className={cn("h-7 px-3 text-[10px] text-foreground font-semibold disabled:opacity-50")}
-                        >
-                          Buy / Sell
-                        </Button>
+                        <div className="flex justify-end gap-2">
+                          <Button 
+                            disabled={!isAdmin}
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => {
+                              setEditSharesMember(m);
+                              setDirectSharesCount(m.shares.toString());
+                              setIsEditSharesOpen(true);
+                            }}
+                            className={cn("h-7 px-2.5 text-[10px] text-foreground font-semibold disabled:opacity-50 gap-1")}
+                          >
+                            <Pencil className="w-3 h-3 text-muted-foreground" /> Edit
+                          </Button>
+                          <Button 
+                            disabled={!isAdmin}
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => {
+                              setBuySellMemberId(m.id);
+                              setBuySellType('buy');
+                              setBuySellAmount('');
+                              setIsBuySellOpen(true);
+                            }}
+                            className={cn("h-7 px-3 text-[10px] text-foreground font-semibold disabled:opacity-50")}
+                          >
+                            Buy / Sell
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -450,7 +655,20 @@ export function SharesPage() {
                       <p className="text-[9px] text-muted-foreground uppercase font-black tracking-widest">Equity Value</p>
                     </div>
                   </div>
-                  <div className="flex justify-end pr-1">
+                  <div className="flex justify-end gap-2 pr-1">
+                    <Button 
+                      disabled={!isAdmin}
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => {
+                        setEditSharesMember(m);
+                        setDirectSharesCount(m.shares.toString());
+                        setIsEditSharesOpen(true);
+                      }}
+                      className={cn("h-7 px-2.5 text-[10px] text-foreground font-semibold disabled:opacity-50 gap-1")}
+                    >
+                      <Pencil className="w-3 h-3 text-muted-foreground" /> Edit
+                    </Button>
                     <Button 
                       disabled={!isAdmin}
                       variant="outline" 
@@ -463,7 +681,7 @@ export function SharesPage() {
                       }}
                       className={cn("h-7 px-3 text-[10px] text-foreground font-semibold disabled:opacity-50")}
                     >
-                      Buy / Sell Shares
+                      Buy / Sell
                     </Button>
                   </div>
                 </div>
@@ -809,9 +1027,25 @@ export function SharesPage() {
                                        </p>
                                     </div>
                                  </div>
-                                 <div className="text-right">
-                                    <p className="text-sm font-black text-foreground">{recShares} Shares</p>
-                                    <p className="text-[10px] text-muted-foreground">₹{(recShares * sharePrice).toLocaleString()}</p>
+                                 <div className="flex items-center gap-2">
+                                    <div className="text-right">
+                                       <p className="text-sm font-black text-foreground">{recShares} Shares</p>
+                                       <p className="text-[10px] text-muted-foreground">₹{(recShares * sharePrice).toLocaleString()}</p>
+                                    </div>
+                                    <Button
+                                       disabled={!isAdmin}
+                                       variant="ghost"
+                                       size="icon"
+                                       className="h-8 w-8 text-neutral-400 hover:text-foreground hover:bg-neutral-800/10 dark:hover:bg-neutral-800/50"
+                                       onClick={() => {
+                                          setEditOnboardingRecord(record);
+                                          setOnboardingSharesCount(recShares.toString());
+                                          setIsEditOnboardingSharesOpen(true);
+                                       }}
+                                       title="Edit Shares directly"
+                                    >
+                                       <Pencil className="w-3.5 h-3.5" />
+                                    </Button>
                                  </div>
                               </div>
                            );
@@ -824,6 +1058,96 @@ export function SharesPage() {
                   </div>
                </div>
             </div>
+         </DialogContent>
+      </Dialog>
+
+      <Dialog open={isEditSharesOpen} onOpenChange={setIsEditSharesOpen}>
+         <DialogContent className="sm:max-w-[425px] text-foreground">
+            <DialogHeader>
+               <DialogTitle className="flex items-center gap-2">
+                  <Pencil className="w-5 h-5 text-indigo-500" />
+                  Edit Member Shares
+               </DialogTitle>
+               <DialogDescription>
+                  Modify the absolute number of equity shares held by the selected member.
+               </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+               <div>
+                  <p className="text-sm font-bold text-muted-foreground uppercase text-[10px] tracking-wider mb-0.5">Member</p>
+                  <p className="text-base font-black">{editSharesMember?.name || 'Unknown'}</p>
+               </div>
+               <div className="grid gap-2">
+                  <label className="text-sm font-medium">Shares Units</label>
+                  <Input 
+                     type="number" 
+                     placeholder="0" 
+                     value={directSharesCount} 
+                     onChange={(e) => setDirectSharesCount(e.target.value)}
+                     className="text-foreground font-black text-lg"
+                  />
+                  {directSharesCount && parseFloat(directSharesCount) >= 0 && (
+                     <p className="text-xs text-muted-foreground">
+                        New simulated equity value: <span className="font-bold text-emerald-500">₹{(parseFloat(directSharesCount) * sharePrice).toLocaleString()}</span>
+                     </p>
+                  )}
+               </div>
+            </div>
+            <DialogFooter>
+               <Button variant="outline" onClick={() => setIsEditSharesOpen(false)} className="text-foreground">Cancel</Button>
+               <Button 
+                  disabled={isSubmitting || !directSharesCount || parseFloat(directSharesCount) < 0} 
+                  onClick={handleEditMemberShares}
+               >
+                  {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <CheckCircle2 className="w-4 h-4 mr-2" />}
+                  Save Changes
+               </Button>
+            </DialogFooter>
+         </DialogContent>
+      </Dialog>
+
+      <Dialog open={isEditOnboardingSharesOpen} onOpenChange={setIsEditOnboardingSharesOpen}>
+         <DialogContent className="sm:max-w-[425px] text-foreground">
+            <DialogHeader>
+               <DialogTitle className="flex items-center gap-2">
+                  <Pencil className="w-5 h-5 text-indigo-500" />
+                  Edit Onboarding Shares
+               </DialogTitle>
+               <DialogDescription>
+                  Modify the projected shares allocation for this onboarding candidate.
+               </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+               <div>
+                  <p className="text-sm font-bold text-muted-foreground uppercase text-[10px] tracking-wider mb-0.5">Candidate</p>
+                  <p className="text-base font-black">{editOnboardingRecord?.name || 'Unknown'}</p>
+               </div>
+               <div className="grid gap-2">
+                  <label className="text-sm font-medium">Desired Shares Units</label>
+                  <Input 
+                     type="number" 
+                     placeholder="0" 
+                     value={onboardingSharesCount} 
+                     onChange={(e) => setOnboardingSharesCount(e.target.value)}
+                     className="text-foreground font-black text-lg"
+                  />
+                  {onboardingSharesCount && parseFloat(onboardingSharesCount) >= 0 && (
+                     <p className="text-xs text-muted-foreground">
+                        Expected investments: <span className="font-bold text-indigo-500">₹{(parseFloat(onboardingSharesCount) * sharePrice).toLocaleString()}</span>
+                     </p>
+                  )}
+               </div>
+            </div>
+            <DialogFooter>
+               <Button variant="outline" onClick={() => setIsEditOnboardingSharesOpen(false)} className="text-foreground">Cancel</Button>
+               <Button 
+                  disabled={isSubmitting || !onboardingSharesCount || parseFloat(onboardingSharesCount) < 0} 
+                  onClick={handleEditOnboardingShares}
+               >
+                  {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <CheckCircle2 className="w-4 h-4 mr-2" />}
+                  Save Changes
+               </Button>
+            </DialogFooter>
          </DialogContent>
       </Dialog>
     </div>
