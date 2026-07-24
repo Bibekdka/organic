@@ -56,6 +56,7 @@ import { handleFirestoreError, OperationType } from '@/lib/firestore-errors';
 import { cn, downloadPDFFile, calculateSettlements } from '@/lib/utils';
 import { getSpendingInsights } from '@/services/geminiService';
 import { AddExpenseDialog } from '@/components/AddExpenseDialog';
+import { DashboardRecordsModal, RecordTabType } from '@/components/DashboardRecordsModal';
 import { 
   Dialog, 
   DialogContent, 
@@ -68,7 +69,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 
-export function Dashboard({ onPageChange }: { onPageChange?: any }) {
+export function Dashboard() {
   const { user } = useAuthStore();
   const isAdmin = user?.email === 'bibekdeka97@gmail.com';
   const [stats, setStats] = React.useState({
@@ -85,6 +86,15 @@ export function Dashboard({ onPageChange }: { onPageChange?: any }) {
   const [loadingInsights, setLoadingInsights] = React.useState(false);
   const [isAddOpen, setIsAddOpen] = React.useState(false);
   const [isProjectedOpen, setIsProjectedOpen] = React.useState(false);
+
+  // Modal for viewing and editing records from dashboard cards
+  const [recordsModalOpen, setRecordsModalOpen] = React.useState(false);
+  const [recordsModalTab, setRecordsModalTab] = React.useState<RecordTabType>('bank_balance');
+
+  const openRecordsModal = (tab: RecordTabType) => {
+    setRecordsModalTab(tab);
+    setRecordsModalOpen(true);
+  };
 
   const [globalSettings, setGlobalSettings] = React.useState<any>(null);
   const [isBalancesCollapsed, setIsBalancesCollapsed] = React.useState(false);
@@ -592,6 +602,17 @@ export function Dashboard({ onPageChange }: { onPageChange?: any }) {
 
       <AddExpenseDialog open={isAddOpen} onOpenChange={setIsAddOpen} />
 
+      <DashboardRecordsModal
+        open={recordsModalOpen}
+        onOpenChange={setRecordsModalOpen}
+        initialTab={recordsModalTab}
+        allExpenses={stats.allExpenses}
+        allIncomes={stats.allIncomes}
+        members={stats.members}
+        user={user}
+        isAdmin={isAdmin}
+      />
+
       <Dialog open={isProjectedOpen} onOpenChange={setIsProjectedOpen}>
         <DialogContent className="sm:max-w-[500px] max-h-[85vh] flex flex-col p-0 overflow-hidden text-foreground">
           <DialogHeader className="p-6 pb-4 border-b">
@@ -674,47 +695,45 @@ export function Dashboard({ onPageChange }: { onPageChange?: any }) {
               value={stats.totalMembers.toString()} 
               icon={<Users className="w-5 h-5" />} 
               color="bg-primary/10 text-primary"
+              clickHint="Click to view & manage team"
+              onClick={() => openRecordsModal('members')}
             />
             <StatCard 
               title="Bank Balance" 
               value={`₹${(bankBalance / 1000).toFixed(bankBalance >= 1000 ? 1 : 2)}k`} 
               icon={<PiggyBank className="w-5 h-5 text-emerald-500" />} 
-              color="bg-emerald-500/10 text-emerald-500 hover:shadow-md cursor-pointer transition-all duration-200"
+              color="bg-emerald-500/10 text-emerald-500"
               trend={`₹${bankBalance.toLocaleString()}`}
               trendType={bankBalance >= 0 ? "up" : "down"}
-              onClick={() => {
-                if (onPageChange) {
-                  onPageChange('bank');
-                } else {
-                  const element = document.getElementById('bank-ledger-section');
-                  if (element) element.scrollIntoView({ behavior: 'smooth' });
-                }
-              }}
+              clickHint="Click to view & edit bank ledger"
+              onClick={() => openRecordsModal('bank_balance')}
             />
             <StatCard 
               title="Amount to be Deposited" 
               value={`₹${amountToBeDeposited.toLocaleString()}`} 
               icon={<TrendingUp className="w-5 h-5 text-amber-500" />} 
-              color="bg-amber-500/10 text-amber-500 hover:shadow-md cursor-pointer transition-all duration-200"
+              color="bg-amber-500/10 text-amber-500"
               trend="Pending Bank Deposit"
               trendType="up"
-              onClick={() => {
-                if (onPageChange) onPageChange('bank');
-              }}
+              clickHint="Click to view & deposit pending"
+              onClick={() => openRecordsModal('pending_deposits')}
             />
             <StatCard 
               title="Total Spent" 
               value={`₹${(stats.totalSpent / 1000).toFixed(stats.totalSpent >= 1000 ? 1 : 2)}k`} 
               icon={<Receipt className="w-5 h-5 animate-pulse" />} 
               color="bg-rose-500/10 text-rose-500"
+              clickHint="Click to view & edit expenses"
+              onClick={() => openRecordsModal('total_spent')}
             />
             <StatCard 
               title="Expected Share Sale" 
               value={`₹${expectedShareSale.toLocaleString()}`} 
               icon={<TrendingUp className="w-5 h-5" />} 
-              color="bg-indigo-500/10 text-indigo-500 hover:bg-indigo-500/20"
+              color="bg-indigo-500/10 text-indigo-500"
               trend={`${totalOnboardingShares} Shares in Queue`}
               trendType="up"
+              clickHint="Click to view onboarding queue"
               onClick={() => setIsProjectedOpen(true)}
             />
             <StatCard 
@@ -722,6 +741,8 @@ export function Dashboard({ onPageChange }: { onPageChange?: any }) {
               value={`₹${dynamicTotalIncome.toLocaleString()}`} 
               icon={<Wallet className="w-5 h-5" />} 
               color="bg-emerald-500/10 text-emerald-500"
+              clickHint="Click to view & edit revenues"
+              onClick={() => openRecordsModal('total_income')}
             />
             <StatCard 
               title="Net Cashflow" 
@@ -730,6 +751,8 @@ export function Dashboard({ onPageChange }: { onPageChange?: any }) {
               color={netCashflow >= 0 ? "bg-emerald-500/10 text-emerald-500" : "bg-rose-500/10 text-rose-500"}
               trend={netCashflow >= 0 ? "Surplus" : "Deficit"}
               trendType={netCashflow >= 0 ? "up" : "down"}
+              clickHint="Click to view full cashflow timeline"
+              onClick={() => openRecordsModal('cashflow')}
             />
           </div>
         );
@@ -1474,34 +1497,43 @@ export function Dashboard({ onPageChange }: { onPageChange?: any }) {
   );
 }
 
-function StatCard({ title, value, icon, trend, trendType, color, onClick }: any) {
+function StatCard({ title, value, icon, trend, trendType, color, clickHint, onClick }: any) {
   return (
     <Card 
       onClick={onClick}
       className={cn(
-        "border-none shadow-md relative overflow-hidden bg-white/5 backdrop-blur-sm",
-        onClick && "cursor-pointer transition-all duration-200 hover:scale-[1.02] hover:bg-white/10 active:scale-95"
+        "border-none shadow-md relative overflow-hidden bg-white/5 backdrop-blur-sm group transition-all duration-200 flex flex-col justify-between",
+        onClick && "cursor-pointer hover:scale-[1.02] hover:bg-white/10 hover:ring-1 hover:ring-primary/30 active:scale-95"
       )}
     >
-      <CardContent className="p-6">
-        <div className="flex items-center justify-between mb-4">
-          <div className={cn("p-2 rounded-xl", color)}>
-            {icon}
-          </div>
-          {trend && (
-            <div className={cn(
-              "flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full",
-              trendType === 'up' ? "bg-emerald-500/10 text-emerald-500" : "bg-rose-500/10 text-rose-500"
-            )}>
-              {trendType === 'up' ? <ArrowUpRight className="w-3 h-3 mr-0.5" /> : <ArrowDownRight className="w-3 h-3 mr-0.5" />}
-              {trend}
-            </div>
-          )}
-        </div>
+      <CardContent className="p-5 flex flex-col justify-between h-full space-y-3">
         <div>
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-widest mb-1">{title}</p>
-          <p className="text-2xl font-black tracking-tight text-foreground">{value}</p>
+          <div className="flex items-center justify-between mb-3">
+            <div className={cn("p-2 rounded-xl transition-transform group-hover:scale-110", color)}>
+              {icon}
+            </div>
+            {trend && (
+              <div className={cn(
+                "flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full",
+                trendType === 'up' ? "bg-emerald-500/10 text-emerald-500" : "bg-rose-500/10 text-rose-500"
+              )}>
+                {trendType === 'up' ? <ArrowUpRight className="w-3 h-3 mr-0.5" /> : <ArrowDownRight className="w-3 h-3 mr-0.5" />}
+                {trend}
+              </div>
+            )}
+          </div>
+          <div>
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-widest mb-1">{title}</p>
+            <p className="text-2xl font-black tracking-tight text-foreground">{value}</p>
+          </div>
         </div>
+
+        {onClick && (
+          <div className="pt-2 border-t border-border/20 flex items-center justify-between text-[10px] text-muted-foreground/80 font-medium group-hover:text-primary transition-colors">
+            <span>{clickHint || "Click to view logs"}</span>
+            <ArrowUpRight className="w-3 h-3 opacity-60 group-hover:opacity-100 transition-all group-hover:translate-x-0.5 group-hover:-translate-y-0.5 text-primary" />
+          </div>
+        )}
       </CardContent>
     </Card>
   );

@@ -10,7 +10,6 @@ import {
   AlertCircle, 
   PiggyBank,
   Check,
-  Calendar,
   Layers,
   Sparkles,
   ChevronDown,
@@ -78,6 +77,7 @@ export function BankPage() {
 
   // States for expandable calculations sheet
   const [isExpanded, setIsExpanded] = React.useState(false);
+  const [expandedLedgerId, setExpandedLedgerId] = React.useState<string | null>(null);
 
   // States for transaction editing
   const [editingItem, setEditingItem] = React.useState<{ type: 'inbound' | 'outbound'; id: string } | null>(null);
@@ -162,7 +162,11 @@ export function BankPage() {
         amount: inc.amount || 0,
         date: inc.date,
         category: inc.category,
-        notes: inc.notes || 'Group dividend/income'
+        notes: inc.notes || '',
+        createdByName: (inc as any).createdByName || (inc as any).createdBy || 'System',
+        createdAt: (inc as any).createdAt || null,
+        updatedByName: (inc as any).updatedByName || null,
+        updatedAt: (inc as any).updatedAt || null
       }));
 
     const outbound = expenses
@@ -174,7 +178,11 @@ export function BankPage() {
         amount: exp.amount || 0,
         date: exp.date,
         category: exp.category,
-        notes: exp.notes || 'Collective utility/expense'
+        notes: exp.notes || '',
+        createdByName: (exp as any).createdByName || (exp as any).createdBy || 'System',
+        createdAt: (exp as any).createdAt || null,
+        updatedByName: (exp as any).updatedByName || null,
+        updatedAt: (exp as any).updatedAt || null
       }));
 
     const compiled = [...inbound, ...outbound]
@@ -602,69 +610,212 @@ export function BankPage() {
 
             <CardContent className="p-0">
               {bankLedger.length > 0 ? (
-                <div className="divide-y divide-border/60 max-h-[500px] overflow-y-auto no-scrollbar">
-                  {bankLedger.map((tx) => (
-                    <div 
-                      key={tx.id} 
-                      className="p-4 hover:bg-secondary/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-colors shrink-0"
-                    >
-                      <div className="flex items-start gap-3">
-                        <div className={cn(
-                          "p-2.5 rounded-lg shrink-0",
-                          tx.type === 'inbound' 
-                            ? "bg-emerald-500/10 text-emerald-500" 
-                            : "bg-rose-500/10 text-rose-500"
-                        )}>
-                          {tx.type === 'inbound' ? (
-                            <ArrowUpRight className="w-5 h-5" />
-                          ) : (
-                            <ArrowDownRight className="w-5 h-5" />
-                          )}
-                        </div>
-                        <div>
-                          <p className="text-sm font-bold text-foreground leading-tight mb-1">{tx.description}</p>
-                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground font-semibold">
-                            <span className="capitalize text-primary/80 bg-primary/5 px-2 py-0.5 rounded-md font-bold text-[10px] tracking-wide border border-primary/10">
-                              {tx.category}
-                            </span>
-                            <span className="flex items-center gap-1">
-                              <Calendar className="w-3.5 h-3.5 text-muted-foreground" /> {tx.date}
-                            </span>
+                <div id="bank-passbook-ledger-container" className="divide-y divide-border/60 max-h-[500px] overflow-y-auto no-scrollbar">
+                  {bankLedger.map((tx) => {
+                    const isRowExpanded = expandedLedgerId === tx.id;
+                    return (
+                      <div 
+                        key={tx.id}
+                        id={`ledger-tx-${tx.id}`}
+                        className={cn(
+                          "transition-all duration-200 border-l-4 shrink-0",
+                          isRowExpanded 
+                            ? "bg-secondary/15 border-indigo-505 shadow-sm" 
+                            : "hover:bg-secondary/10 border-transparent"
+                        )}
+                      >
+                        {/* Summary / Simple Clickable Header Bar */}
+                        <div 
+                          id={`ledger-tx-header-${tx.id}`}
+                          onClick={() => setExpandedLedgerId(isRowExpanded ? null : tx.id)}
+                          className="flex flex-col sm:flex-row sm:items-center justify-between p-4 gap-3 cursor-pointer select-none"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className={cn(
+                              "p-2 rounded-lg shrink-0",
+                              tx.type === 'inbound' 
+                                ? "bg-emerald-500/10 text-emerald-500" 
+                                : "bg-rose-500/10 text-rose-500"
+                            )}>
+                              {tx.type === 'inbound' ? (
+                                <ArrowUpRight className="w-4 h-4" />
+                              ) : (
+                                <ArrowDownRight className="w-4 h-4" />
+                              )}
+                            </div>
+                            <div>
+                              <p className="text-sm font-bold text-foreground leading-tight">{tx.description}</p>
+                              <p className="text-[11px] text-muted-foreground font-semibold flex items-center gap-1.5 mt-1 font-sans">
+                                <span>{tx.date}</span>
+                                <span className="opacity-40">•</span>
+                                <span className="opacity-90">{tx.category || 'General'}</span>
+                              </p>
+                            </div>
                           </div>
-                          {tx.notes && (
-                            <p className="text-[11px] text-muted-foreground italic mt-1.5 bg-muted/10 p-2 rounded border border-border/20 max-w-sm">
-                              {tx.notes}
-                            </p>
-                          )}
-                        </div>
-                      </div>
 
-                      <div className="text-left sm:text-right shrink-0 flex items-center gap-3">
-                        <div>
-                          <p className={cn(
-                            "text-base font-black font-mono tracking-tight",
-                            tx.type === 'inbound' ? "text-emerald-500" : "text-rose-500"
-                          )}>
-                            {tx.type === 'inbound' ? '+' : '-'}₹{tx.amount.toLocaleString()}
-                          </p>
-                          <span className="text-[9px] font-black uppercase text-muted-foreground tracking-widest bg-muted/20 px-1.5 py-0.5 rounded border border-border/30">
-                            {tx.type === 'inbound' ? 'Deposit' : 'Expense / Fund Out'}
-                          </span>
+                          <div className="text-left sm:text-right shrink-0 flex items-center justify-between sm:justify-end gap-4">
+                            <div className="font-mono">
+                              <p className={cn(
+                                "text-sm sm:text-base font-black tracking-tight",
+                                tx.type === 'inbound' ? "text-emerald-500" : "text-rose-500"
+                              )}>
+                                {tx.type === 'inbound' ? '+' : '-'}₹{tx.amount.toLocaleString()}
+                              </p>
+                            </div>
+                            <div className="text-muted-foreground/60">
+                              {isRowExpanded ? (
+                                <ChevronUp className="w-4 h-4" />
+                              ) : (
+                                <ChevronDown className="w-4 h-4" />
+                              )}
+                            </div>
+                          </div>
                         </div>
-                        {isAdmin && (
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            onClick={() => startEdit(tx.type, tx.id)}
-                            className="w-8 h-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary/45"
-                            title="Edit transaction details"
-                          >
-                            <Pencil className="w-4 h-4" />
-                          </Button>
+
+                        {/* Detailed Precise Secondary Panel */}
+                        {isRowExpanded && (
+                          <div id={`ledger-tx-details-${tx.id}`} className="px-4 pb-4 pt-1 border-t border-dashed border-border/40 animate-in slide-in-from-top-1 duration-150">
+                            <div className="bg-background/80 rounded-xl p-4 border border-border/40 space-y-4 text-xs font-sans">
+                              {/* Metadata grid */}
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                  <div>
+                                    <span className="text-[10px] uppercase tracking-wider font-extrabold text-muted-foreground block mb-0.5">Unique Ledger Hash</span>
+                                    <code className="text-xs font-mono bg-muted/20 px-2 py-1 rounded select-all block break-all text-muted-foreground">
+                                      {tx.id}
+                                    </code>
+                                  </div>
+                                  <div>
+                                    <span className="text-[10px] uppercase tracking-wider font-extrabold text-muted-foreground block mb-0.5">Reconciliation Category</span>
+                                    <span className="text-xs font-bold text-foreground capitalize bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded">
+                                      {tx.category || 'General'}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <span className="text-[10px] uppercase tracking-wider font-extrabold text-muted-foreground block mb-0.5">Audit Route</span>
+                                    <span className="text-xs font-semibold text-foreground">
+                                      {tx.type === 'inbound' 
+                                        ? "Cleared & Submitted to Bank Treasury Account" 
+                                        : "Cleared & Settled from collective treasury account"}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                <div className="space-y-2">
+                                  <div>
+                                    <span className="text-[10px] uppercase tracking-wider font-extrabold text-muted-foreground block mb-0.5">Settlement Path</span>
+                                    <span className="text-xs font-semibold text-foreground">
+                                      {tx.type === 'inbound' 
+                                        ? "Offline Cash / Share Proceeds → Direct Bank Vault Entry" 
+                                        : "Direct collective fund → Authorized Outbound Expense"}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <span className="text-[10px] uppercase tracking-wider font-extrabold text-muted-foreground block mb-0.5">Authorized Sign-off</span>
+                                    <span className="text-xs font-semibold text-foreground block">
+                                      Created by: <b className="font-bold">{tx.createdByName || 'System'}</b>
+                                      {tx.createdAt && ` on ${new Date(tx.createdAt).toLocaleDateString()}`}
+                                    </span>
+                                  </div>
+                                  {tx.updatedByName && (
+                                    <div>
+                                      <span className="text-[10px] uppercase tracking-wider font-extrabold text-muted-foreground block mb-0.5">Last Modification Audit</span>
+                                      <span className="text-xs font-semibold text-foreground block">
+                                        Edited by: <b className="font-bold">{tx.updatedByName}</b>
+                                        {tx.updatedAt && ` on ${new Date(tx.updatedAt).toLocaleDateString()}`}
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Description & Audit details */}
+                              <div className="pt-2 border-t border-border/30">
+                                <span className="text-[10px] uppercase tracking-wider font-extrabold text-muted-foreground block mb-1">Audit Ledger Narrative / Notes</span>
+                                <div className="p-3 bg-secondary/20 rounded-lg text-muted-foreground border border-border/20 text-xs italic leading-relaxed">
+                                  {tx.notes ? `"${tx.notes}"` : 'No additional logs or narrative records are reported with this item.'}
+                                </div>
+                              </div>
+
+                              {/* Pristine Share Sales Equity Capitalization Details */}
+                              {tx.type === 'inbound' && (tx.amount === 10000 || tx.description.toLowerCase().includes('share') || tx.notes?.toLowerCase().includes('share') || tx.category === 'Sales') && (
+                                <div className="pt-3 border-t border-border/30 space-y-2">
+                                  <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider font-extrabold text-indigo-400">
+                                    <Sparkles className="w-3.5 h-3.5" />
+                                    <span>Pristine Share Equity Capitalization (100% Alignment - ₹10,000)</span>
+                                  </div>
+                                  <div className="overflow-x-auto rounded-xl border border-indigo-500/20 bg-indigo-500/5 p-1">
+                                    <table className="w-full text-left text-[11px] font-sans">
+                                      <thead className="bg-indigo-500/10 text-indigo-400 uppercase font-black tracking-wider text-[9px] border-b border-indigo-500/15">
+                                        <tr>
+                                          <th className="px-3 py-2">Name</th>
+                                          <th className="px-3 py-2 text-center">Shares</th>
+                                          <th className="px-3 py-2 text-center">Percentage</th>
+                                          <th className="px-3 py-2 text-right">Amount</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody className="divide-y divide-indigo-500/5 bg-background/40 font-medium">
+                                        {[
+                                          { name: "Menoka Kumari", shares: 10, pct: "10.00%", amount: 1000 },
+                                          { name: "Vishal Singh", shares: 10, pct: "10.00%", amount: 1000 },
+                                          { name: "Ritam Choudhury", shares: 10, pct: "10.00%", amount: 1000 },
+                                          { name: "Rohit Sharma", shares: 10, pct: "10.00%", amount: 1000 },
+                                          { name: "Rumi Begum", shares: 10, pct: "10.00%", amount: 1000 },
+                                          { name: "Dipali Borthakur", shares: 10, pct: "10.00%", amount: 1000 },
+                                          { name: "Pradip Boruah", shares: 7, pct: "7.00%", amount: 700 },
+                                          { name: "Aryan Konwar", shares: 7, pct: "7.00%", amount: 700 },
+                                          { name: "Putlu Bhumiz", shares: 7, pct: "7.00%", amount: 700 },
+                                          { name: "Amar Nath Pandit", shares: 7, pct: "7.00%", amount: 700 },
+                                          { name: "Mosumi Rautiya", shares: 2, pct: "2.00%", amount: 200 },
+                                          { name: "Mohima Boraik", shares: 2, pct: "2.00%", amount: 200 },
+                                          { name: "Shima Nayak", shares: 2, pct: "2.00%", amount: 200 },
+                                          { name: "Dipok Murah", shares: 2, pct: "2.00%", amount: 200 },
+                                          { name: "John Pator", shares: 2, pct: "2.00%", amount: 200 },
+                                          { name: "Malti Moneswar", shares: 2, pct: "2.00%", amount: 200 },
+                                        ].map((row, idx) => (
+                                          <tr key={idx} className="hover:bg-indigo-500/10 transition-colors">
+                                            <td className="px-3 py-1.5 font-bold text-foreground">{row.name}</td>
+                                            <td className="px-3 py-1.5 text-center font-mono text-muted-foreground">{row.shares}</td>
+                                            <td className="px-3 py-1.5 text-center font-mono text-muted-foreground">{row.pct}</td>
+                                            <td className="px-3 py-1.5 text-right font-mono text-emerald-500 font-extrabold">₹{row.amount.toLocaleString()}</td>
+                                          </tr>
+                                        ))}
+                                        <tr className="bg-indigo-500/15 font-black text-foreground border-t border-indigo-500/25">
+                                          <td className="px-3 py-2 text-indigo-400">TOTAL</td>
+                                          <td className="px-3 py-2 text-center font-mono">100</td>
+                                          <td className="px-3 py-2 text-center font-mono">100%</td>
+                                          <td className="px-3 py-2 text-right font-mono text-emerald-500">₹10,000</td>
+                                        </tr>
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Action edit row only for isAdmin */}
+                              {isAdmin && (
+                                <div className="pt-3 border-t border-border/30 flex justify-end">
+                                  <Button 
+                                    id={`edit-ledger-btn-${tx.id}`}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      startEdit(tx.type, tx.id);
+                                    }}
+                                    variant="outline" 
+                                    size="sm"
+                                    className="border-indigo-500/20 text-indigo-500 hover:bg-indigo-500/10 font-bold text-xs h-8 gap-1.5 bg-indigo-500/5 hover:border-indigo-500/40 font-sans"
+                                  >
+                                    <Pencil className="w-3.5 h-3.5" />
+                                    Configure Ledger Details
+                                  </Button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
                         )}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="text-center py-16 text-muted-foreground flex flex-col items-center justify-center space-y-3">
