@@ -69,7 +69,10 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 
-export function Dashboard() {
+// eslint-disable-next-line no-unused-vars
+export function Dashboard({ onPageChange }: { onPageChange?: (page?: any) => void } = {}) {
+  // onPageChange available for parent page navigation if needed
+  void onPageChange;
   const { user } = useAuthStore();
   const isAdmin = user?.email === 'bibekdeka97@gmail.com';
   const [stats, setStats] = React.useState({
